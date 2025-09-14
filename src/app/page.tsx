@@ -1,103 +1,123 @@
-import Image from "next/image";
+"use client"
 
-export default function Home() {
+import { useState } from "react"
+import { Sparkles } from "lucide-react"
+import { Navigation } from "@/components/navigation"
+import { JobCard } from "@/components/job-card"
+import { JobFilters } from "@/components/job-filters"
+import { Button } from "@/components/ui/button"
+import { Badge } from "@/components/ui/badge"
+import type { JobPosting, JobSearchFilters } from "@/lib/types"
+
+// Mock data for demonstration
+const mockJobs: JobPosting[] = [
+  {
+    id: "1",
+    title: "프론트엔드 개발자",
+    companyName: "네이버",
+    description: "React, TypeScript를 활용한 웹 서비스 개발을 담당하실 프론트엔드 개발자를 모집합니다.",
+    requirements: "React, TypeScript 경험 3년 이상",
+    preferred: "Next.js, GraphQL 경험자 우대",
+    location: "서울 강남구",
+    salary: "연봉 4,000~6,000만원",
+    jobType: "full-time",
+    techStack: ["React", "TypeScript", "Next.js", "GraphQL"],
+    sourceUrl: "https://example.com",
+    createdAt: new Date("2024-01-15"),
+    updatedAt: new Date("2024-01-15"),
+  },
+  {
+    id: "2",
+    title: "백엔드 개발자",
+    companyName: "카카오",
+    description: "Spring Boot를 활용한 대규모 서비스 백엔드 개발을 담당하실 개발자를 찾습니다.",
+    requirements: "Java, Spring 경험 5년 이상",
+    preferred: "MSA, Kubernetes 경험자 우대",
+    location: "경기 성남시",
+    salary: "연봉 5,000~7,000만원",
+    jobType: "full-time",
+    techStack: ["Java", "Spring Boot", "MySQL", "Redis"],
+    sourceUrl: "https://example.com",
+    createdAt: new Date("2024-01-14"),
+    updatedAt: new Date("2024-01-14"),
+  },
+  {
+    id: "3",
+    title: "AI 엔지니어",
+    companyName: "삼성전자",
+    description: "머신러닝 모델 개발 및 AI 서비스 구축을 담당하실 AI 엔지니어를 모집합니다.",
+    requirements: "Python, TensorFlow/PyTorch 경험",
+    preferred: "MLOps, 클라우드 경험자 우대",
+    location: "서울 서초구",
+    salary: "연봉 6,000~8,000만원",
+    jobType: "full-time",
+    techStack: ["Python", "TensorFlow", "PyTorch", "AWS"],
+    sourceUrl: "https://example.com",
+    createdAt: new Date("2024-01-13"),
+    updatedAt: new Date("2024-01-13"),
+  },
+]
+
+export default function HomePage() {
+  const [filters, setFilters] = useState<JobSearchFilters>({})
+
   return (
-    <div className="font-sans grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20">
-      <main className="flex flex-col gap-[32px] row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="font-mono list-inside list-decimal text-sm/6 text-center sm:text-left">
-          <li className="mb-2 tracking-[-.01em]">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] font-mono font-semibold px-1 py-0.5 rounded">
-              src/app/page.tsx
-            </code>
-            .
-          </li>
-          <li className="tracking-[-.01em]">
-            Save and see your changes instantly.
-          </li>
-        </ol>
+    <div className="min-h-screen bg-background">
+      <Navigation />
 
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:w-auto"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
-            />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 w-full sm:w-auto md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
-          </a>
-        </div>
+      <main className="container mx-auto px-4 py-8">
+        {/* Hero Section */}
+        <section className="text-center py-12 mb-12">
+          <div className="max-w-3xl mx-auto space-y-6">
+            <div className="flex items-center justify-center gap-2 mb-4">
+              <Sparkles className="h-8 w-8 text-primary" />
+              <Badge variant="secondary" className="text-sm">
+                AI 추천
+              </Badge>
+            </div>
+            <h1 className="text-4xl md:text-5xl font-bold text-balance">
+              AI로 분석하는 
+              <br />
+              <span className="text-primary">나의 합격 가능성</span>
+            </h1>
+            <p className="text-xl text-muted-foreground text-pretty max-w-2xl mx-auto">
+             가고 싶은 기업의 채용 공고에 맞춰 AI가 적합도를 분석하고 합격률을 높이는 방법을 제안합니다.
+             
+            </p>
+            <div className="flex flex-col sm:flex-row gap-4 justify-center">
+              <Button size="lg" className="text-lg px-8">
+                내 핏(Fit) 분석하기
+              </Button>
+              <Button variant="outline" size="lg" className="text-lg px-8 bg-transparent">
+                채용공고 둘러보기
+              </Button>
+            </div>
+          </div>
+        </section>
+
+        {/* Job Listings Section */}
+        <section>
+          <div className="flex items-center justify-between mb-6">
+            <div>
+              <h2 className="text-2xl font-bold mb-2">최신 채용공고</h2>
+              <p className="text-muted-foreground">AI가 추천하는 맞춤형 일자리를 확인해보세요</p>
+            </div>
+            <JobFilters filters={filters} onFiltersChange={setFilters} />
+          </div>
+
+          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+            {mockJobs.map((job) => (
+              <JobCard key={job.id} job={job} />
+            ))}
+          </div>
+
+          <div className="text-center mt-8">
+            <Button variant="outline" size="lg">
+              더 많은 채용공고 보기
+            </Button>
+          </div>
+        </section>
       </main>
-      <footer className="row-start-3 flex gap-[24px] flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
     </div>
-  );
+  )
 }

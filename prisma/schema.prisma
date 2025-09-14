@@ -1,0 +1,78 @@
+// Prisma Schema for C-FIT Project
+
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+
+
+model User {
+  id        String    @id @default(cuid())
+  email     String    @unique
+  name      String?
+  passwordHash  String
+  resume    String?   @db.Text // AI 분석을 위한 이력서 원문 (긴 텍스트)
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  // 사용자가 저장한 관심 공고 목록과의 관계 설정
+  savedJobs SavedJob[]
+}
+
+/**
+ * 크롤링으로 수집한 채용 공고 정보를 저장하는 모델입니다.
+ */
+model JobPosting {
+  id               String    @id @default(cuid())
+  
+  companyName      String?
+  title            String
+  url              String    @unique
+
+  // --- 필터링을 위한 핵심 필드 ---
+  jobName          String?   
+  techStacks       String[]
+  experienceLevel  String?
+  careerYears      Int[]
+
+  // --- 상세 정보 (나중에 채울 필드) ---
+  description      String?   @db.Text
+  requirements     String?   @db.Text
+  preferred        String?   @db.Text
+  employmentType   String?
+  location         String?
+  deadline         String?
+
+  vector           Unsupported("vector(1536)")?
+  crawledAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  savedBy          SavedJob[]
+}
+
+/**
+ * 사용자와 채용 공고의 '관심' 관계를 저장하는 중간 테이블입니다.
+ * (Many-to-Many 관계)
+ */
+model SavedJob {
+  id             String    @id @default(cuid())
+  
+  userId         String    // User 모델의 외래 키
+  jobPostingId   String    // JobPosting 모델의 외래 키
+  
+  createdAt      DateTime  @default(now())
+
+  // 관계 정의: onDelete: Cascade는 사용자가 탈퇴하면 관련 관심 공고 기록도 함께 삭제되도록 합니다.
+  user           User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  jobPosting     JobPosting @relation(fields: [jobPostingId], references: [id], onDelete: Cascade)
+
+  // 한 명의 유저가 동일한 공고를 중복해서 저장하는 것을 방지합니다.
+  @@unique([userId, jobPostingId])
+}

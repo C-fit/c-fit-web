@@ -1,0 +1,30 @@
+version: '3.8'
+
+services:
+  cfit_db: # 서비스/컨테이너 이름 cfit_db로 변경
+    image: pgvector/pgvector:pg16
+    container_name: cfit_db # 컨테이너 이름 cfit_db로 변경
+    restart: always
+    
+    environment:
+      POSTGRES_USER: cfit_user          # 사용자 이름 cfit_user로 변경
+      POSTGRES_PASSWORD: cfit_password # ※이 부분은 꼭 강력한 비밀번호로 직접 변경해주세요!
+      POSTGRES_DB: cfit                 # 데이터베이스 이름 cfit으로 변경
+      
+    ports:
+      - "7432:5432"
+      
+    volumes:
+      - cfit_db_volume:/var/lib/postgresql/data # 볼륨 이름 cfit_db_volume으로 변경
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
+      
+    networks:
+      - cfit_network # 네트워크 이름 cfit_network로 변경
+
+volumes:
+  cfit_db_volume:
+    name: cfit_db_volume # 볼륨 이름 cfit_db_volume으로 변경
+
+networks:
+  cfit_network:
+    name: cfit_network # 네트워크 이름 cfit_network으로 변경
