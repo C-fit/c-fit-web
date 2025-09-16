@@ -16,7 +16,7 @@ import {
 } from '@/components/ui/select';
 import { JobCard } from '@/components/jobs/job-card';
 import { MultiSelectDialog } from '@/components/filters/multi-select-dialog';
-import { JOB_OPTIONS, TECH_OPTIONS } from '@/lib/job-tech-options';
+import { JOB_OPTIONS } from '@/lib/job-tech-options';
 
 type ApiItem = {
   id: string;
@@ -24,7 +24,6 @@ type ApiItem = {
   companyName?: string | null;
   title: string;
   jobName?: string | null;
-  techStacks: string[];
   experienceLevel?: string | null;
   careerYears: number[];
   location?: string | null;
@@ -49,7 +48,6 @@ export default function JobsPage() {
   const [q, setQ] = useState('');
   const [jobs, setJobs] = useState<string[]>([]); // ⬅️ 변경: 배열
   const [company, setCompany] = useState('');
-  const [techs, setTechs] = useState<string[]>([]); // ⬅️ 변경: 배열
   const [exp, setExp] = useState<string>(''); // "", "신입", "경력무관"
   const [years, setYears] = useState<[number, number]>([0, 20]);
   const [sort, setSort] = useState<'recent' | 'company' | 'title'>('recent');
@@ -78,15 +76,7 @@ export default function JobsPage() {
         : []
     );
 
-    const t = get('tech');
-    setTechs(
-      t
-        ? t
-            .split(',')
-            .map((s) => s.trim())
-            .filter(Boolean)
-        : []
-    );
+
 
     const expQ = get('exp');
     setExp(expQ);
@@ -114,7 +104,6 @@ export default function JobsPage() {
     if (q) p.set('q', q);
     if (jobs.length) p.set('job', jobs.join(','));
     if (company) p.set('company', company);
-    if (techs.length) p.set('tech', techs.join(','));
     if (exp) p.set('exp', exp);
     if (years) {
       p.set('minYear', String(years[0]));
@@ -124,7 +113,7 @@ export default function JobsPage() {
     p.set('page', String(page));
     p.set('pageSize', String(pageSize));
     return p.toString();
-  }, [q, jobs, company, techs, exp, years, sort, page, pageSize]);
+  }, [q, jobs, company, exp, years, sort, page, pageSize]);
 
   // 주소 동기화
   useEffect(() => {
@@ -187,7 +176,6 @@ export default function JobsPage() {
     setQ('');
     setJobs([]);
     setCompany('');
-    setTechs([]);
     setExp('');
     setYears([0, 20]);
     setSort('recent');
@@ -232,19 +220,6 @@ export default function JobsPage() {
           />
         </div>
 
-        <div className='space-y-1'>
-          <Label>기술스택</Label>
-          <MultiSelectDialog
-            triggerLabel='기술스택'
-            options={TECH_OPTIONS}
-            value={techs}
-            onChange={(v) => {
-              setTechs(v);
-              setPage(1);
-            }}
-            placeholder='보유 기술스택을 검색해 주세요.'
-          />
-        </div>
 
         <div className='space-y-1'>
           <Label>회사</Label>

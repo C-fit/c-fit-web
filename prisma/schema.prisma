@@ -38,7 +38,6 @@ model JobPosting {
 
   // --- 필터링을 위한 핵심 필드 ---
   jobName          String?   
-  techStacks       String[]
   experienceLevel  String?
   careerYears      Int[]
 
