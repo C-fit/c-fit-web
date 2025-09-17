@@ -57,10 +57,12 @@ export function JobCard({
     } catch (e) {
       console.error(e);
       alert('관심공고 저장에 실패했습니다.');
+
     }
   }
 
   return (
+
     <Card className='h-full flex flex-col'>
       <CardHeader className='space-y-1'>
         <CardTitle className='text-lg leading-tight'>{item.title}</CardTitle>
@@ -102,9 +104,12 @@ export function JobCard({
         <a href={item.url} target='_blank' rel='noreferrer'>
           <Button variant='secondary' size='sm'>
             상세보기 <ExternalLink className='h-4 w-4 ml-1' />
+
           </Button>
         </a>
       </CardFooter>
     </Card>
+
   );
+
 }

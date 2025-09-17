@@ -1,8 +1,10 @@
+
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
@@ -15,6 +17,8 @@ import {
   SelectItem,
 } from '@/components/ui/select';
 import { JobCard } from '@/components/jobs/job-card';
+
+
 
 type ApiItem = {
   id: string;
@@ -34,6 +38,7 @@ type ApiResp = {
   page: number;
   pageSize: number;
 };
+
 
 export default function JobsPage() {
   const router = useRouter();
@@ -61,6 +66,7 @@ export default function JobsPage() {
     if (job) p.set('job', job);
     if (company) p.set('company', company);
     if (exp !== 'all') p.set('exp', exp);
+
     if (years) {
       p.set('minYear', String(years[0]));
       p.set('maxYear', String(years[1]));
@@ -69,6 +75,7 @@ export default function JobsPage() {
     p.set('page', String(page));
     p.set('pageSize', String(pageSize));
     return p.toString();
+
   }, [q, job, company, exp, years, sort, page, pageSize]);
 
   async function fetchList() {
@@ -93,6 +100,7 @@ export default function JobsPage() {
     setJob('');
     setCompany('');
     setExp('all');
+
     setYears([0, 20]);
     setSort('recent');
     setPage(1);
@@ -122,6 +130,7 @@ export default function JobsPage() {
           <Label>검색어</Label>
           <Input
             placeholder="제목/회사/직무…"
+
             value={q}
             onChange={(e) => {
               setQ(e.target.value);
@@ -129,6 +138,7 @@ export default function JobsPage() {
             }}
           />
         </div>
+
 
         <div className="space-y-1">
           <Label>직무(콤마로 여러 개)</Label>
@@ -146,6 +156,7 @@ export default function JobsPage() {
           <Label>회사</Label>
           <Input
             placeholder="회사명"
+
             value={company}
             onChange={(e) => {
               setCompany(e.target.value);
@@ -153,6 +164,7 @@ export default function JobsPage() {
             }}
           />
         </div>
+
 
         <div className="space-y-1">
           <Label>정렬</Label>
@@ -177,6 +189,7 @@ export default function JobsPage() {
         <div className="space-y-1 md:col-span-2">
           <Label>경력 구간 (년)</Label>
           <div className="px-2">
+
             <Slider
               min={0}
               max={20}
@@ -188,10 +201,13 @@ export default function JobsPage() {
               }}
             />
           </div>
+
           <div className="text-sm text-muted-foreground">
+
             선택: {years[0]} ~ {years[1]}년
           </div>
         </div>
+
 
         <div className="space-y-1">
           <Label>경력 표기</Label>
@@ -199,10 +215,12 @@ export default function JobsPage() {
             value={exp}
             onValueChange={(v: 'all' | '신입' | '경력무관') => {
               setExp(v);
+
               setPage(1);
             }}
           >
             <SelectTrigger>
+
               <SelectValue placeholder="전체" />
             </SelectTrigger>
             <SelectContent>
@@ -210,6 +228,7 @@ export default function JobsPage() {
               <SelectItem value="all">전체</SelectItem>
               <SelectItem value="신입">신입</SelectItem>
               <SelectItem value="경력무관">경력무관</SelectItem>
+
             </SelectContent>
           </Select>
         </div>
@@ -253,11 +272,13 @@ export default function JobsPage() {
         <Button
           variant="outline"
           size="sm"
+
           onClick={() => setPage((p) => Math.max(1, p - 1))}
           disabled={page <= 1 || loading}
         >
           이전
         </Button>
+
         <div className="text-sm">
           페이지 {page} / {totalPages}
         </div>
@@ -268,6 +289,7 @@ export default function JobsPage() {
             if (page < totalPages) setPage((p) => p + 1);
           }}
           disabled={loading || page >= totalPages}
+
         >
           다음
         </Button>
