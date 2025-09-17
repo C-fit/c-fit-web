@@ -17,18 +17,19 @@ model User {
   email     String    @unique
   name      String?
   passwordHash  String
-  resume    String?   @db.Text // AI 분석을 위한 이력서 원문 (긴 텍스트)
+
+
+  resume    ResumeFile[]
+
 
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
 
-  // 사용자가 저장한 관심 공고 목록과의 관계 설정
   savedJobs SavedJob[]
 }
 
-/**
- * 크롤링으로 수집한 채용 공고 정보를 저장하는 모델입니다.
- */
+
+
 model JobPosting {
   id               String    @id @default(cuid())
   
@@ -38,7 +39,7 @@ model JobPosting {
 
   // --- 필터링을 위한 핵심 필드 ---
   jobName          String?   
-  techStacks       String[]
+
   experienceLevel  String?
   careerYears      Int[]
 
@@ -75,4 +76,21 @@ model SavedJob {
 
   // 한 명의 유저가 동일한 공고를 중복해서 저장하는 것을 방지합니다.
   @@unique([userId, jobPostingId])
+
+}
+
+model ResumeFile {
+  id           String   @id @default(cuid())
+  userId       String
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  originalName String
+  storedPath   String     
+  mimeType     String
+  size         Int
+
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([userId, createdAt])
 }
