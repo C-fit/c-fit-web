@@ -7,8 +7,8 @@ import { AuthProvider } from "@/contexts/auth-context"
 import "./globals.css"
 
 export const metadata: Metadata = {
-  title: "C:Fit - Fit한 이력서 만들기",
-  description: "C:Fit - Fit한 이력서 만들기",
+  title: "C:Fit - 나에게 맞춘 채용 정보",
+  description: "AI 기반 맞춤형 채용 정보 플랫폼으로 당신에게 완벽한 일자리를 찾아보세요",
   generator: "v0.app",
 }
 

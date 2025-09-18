@@ -12,7 +12,6 @@ type Item = {
   companyName?: string | null
   title: string
   jobName?: string | null
-  techStacks: string[]
   experienceLevel?: string | null
   careerYears: number[]
   location?: string | null
@@ -54,14 +53,6 @@ export function JobCard({ item, onSavedChange }: { item: Item; onSavedChange?: (
         <div className="text-xs text-muted-foreground">
           경력: {item.experienceLevel ?? "경력무관"} · 연차: {Math.min(...item.careerYears)}~{Math.max(...item.careerYears)}년
         </div>
-        {item.techStacks?.length > 0 && (
-          <div className="flex flex-wrap gap-2 mt-2">
-            {item.techStacks.slice(0, 8).map((t) => (
-              <span key={t} className="text-xs border rounded px-2 py-0.5">{t}</span>
-            ))}
-            {item.techStacks.length > 8 && <span className="text-xs text-muted-foreground">+{item.techStacks.length - 8}</span>}
-          </div>
-        )}
       </CardContent>
       <CardFooter className="flex gap-2 justify-end">
         <Button variant="ghost" size="icon" onClick={toggleSave} disabled={pending} title={saved ? "저장 해제" : "저장"}>
