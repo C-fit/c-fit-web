@@ -16,27 +16,7 @@ interface JobFiltersProps {
 export function JobFilters({ filters, onFiltersChange }: JobFiltersProps) {
   const [isOpen, setIsOpen] = useState(false)
 
-  const techStackOptions = [
-    "React",
-    "Next.js",
-    "TypeScript",
-    "JavaScript",
-    "Python",
-    "Java",
-    "Spring",
-    "Node.js",
-    "Vue.js",
-    "Angular",
-    "PHP",
-    "Laravel",
-    "Django",
-    "Flask",
-    "Go",
-    "Rust",
-    "C++",
-    "C#",
-    ".NET",
-  ]
+  const techStackOptions = []
 
   const jobTypeOptions = [
     { value: "full-time", label: "정규직" },

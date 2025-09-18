@@ -25,6 +25,7 @@ export async function GET(req: Request) {
   const q = (searchParams.get('q') || '').trim();
   const job = (searchParams.get('job') || '').trim(); // 콤마구분 가능: "프론트엔드 개발자,웹 퍼블리셔"
   const company = (searchParams.get('company') || '').trim();
+
   const exp = (searchParams.get('exp') || '').trim(); // "신입" | "경력무관" | ""(모두)
   const sort = (searchParams.get('sort') || 'recent').trim(); // "recent" | "company" | "title"
 
@@ -52,8 +53,6 @@ export async function GET(req: Request) {
     if (jobs.length) where.jobName = { in: jobs };
   }
   if (company) where.companyName = { contains: company, mode: 'insensitive' };
-
-
 
   if (exp) {
     // "신입" 또는 "경력무관" 지정 시 빠른 필터

@@ -67,4 +67,4 @@ export async function POST(req: NextRequest) {
     console.error('resume upload error:', e);
     return NextResponse.json({ error: 'bad request' }, { status: 400 });
   }
-}
+};

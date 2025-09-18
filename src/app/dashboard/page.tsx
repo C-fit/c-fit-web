@@ -17,6 +17,7 @@ export default function DashboardPage() {
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
+
         <span className="animate-spin inline-block w-6 h-6 border-2 border-current border-t-transparent rounded-full" />
       </div>
     );
@@ -25,4 +26,5 @@ export default function DashboardPage() {
 
   // 실제 UI/로직은 모두 자식에서 처리 → Hook 호출 순서 안정
   return <DashboardBody user={user} />;
+
 }

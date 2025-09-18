@@ -18,13 +18,16 @@ model User {
   name      String?
   passwordHash  String
 
+
   resume    ResumeFile[]
+
 
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
 
   savedJobs SavedJob[]
 }
+
 
 
 model JobPosting {
@@ -36,6 +39,7 @@ model JobPosting {
 
   // --- 필터링을 위한 핵심 필드 ---
   jobName          String?   
+
   experienceLevel  String?
   careerYears      Int[]
 
@@ -72,6 +76,7 @@ model SavedJob {
 
   // 한 명의 유저가 동일한 공고를 중복해서 저장하는 것을 방지합니다.
   @@unique([userId, jobPostingId])
+
 }
 
 model ResumeFile {
