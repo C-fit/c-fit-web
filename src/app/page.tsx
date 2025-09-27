@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import Link from 'next/link';
 import { Sparkles } from 'lucide-react';
 import { Navigation } from '@/components/navigation';
 import { JobCard } from '@/components/job-card';
@@ -81,7 +82,8 @@ export default function HomePage() {
             <h1 className='text-4xl md:text-5xl font-bold text-balance'>
               AI가 찾아주는
               <br />
-              <span className='text-primary'>완벽한 일자리</span>
+              {/* 텍스트에 그라데이션 */}
+              <span className='text-brand'>완벽한 일자리</span>
             </h1>
             <p className='text-xl text-muted-foreground text-pretty max-w-2xl mx-auto'>
               원하는 기업의 채용 공고에 맞춰
@@ -90,21 +92,27 @@ export default function HomePage() {
               </span>
             </p>
             <div className='flex flex-col sm:flex-row gap-4 justify-center'>
-              <Button 
-              variant='outline'
-                size='lg'
-                className='text-lg px-8 bg-transparent'
-              >
-                <Sparkles className='h-4 w-4 mr-1' />
-                Fit 분석하기
-              </Button>
-  
+              {/* 1차 CTA: 그라데이션 버튼 */}
               <Button
-                variant='outline'
+                asChild
+                variant='gradient'
                 size='lg'
-                className='text-lg px-8 bg-transparent'
+                className='text-lg px-8'
               >
-                채용공고 둘러보기
+                <Link href='/ai-match'>
+                  <Sparkles className='h-4 w-4 mr-1' />
+                  Fit 분석하기
+                </Link>
+              </Button>
+
+              {/* 2차 CTA: 텍스트만 그라데이션(보조 액션) */}
+              <Button
+                asChild
+                variant='gradient'
+                size='lg'
+                className='text-lg px-8'
+              >
+                <Link href='/jobs'>채용공고 둘러보기</Link>
               </Button>
             </div>
           </div>
@@ -126,12 +134,6 @@ export default function HomePage() {
             {mockJobs.map((job) => (
               <JobCard key={job.id} job={job} />
             ))}
-          </div>
-
-          <div className='text-center mt-8'>
-            <Button variant='outline' size='lg'>
-              더 많은 채용공고 보기
-            </Button>
           </div>
         </section>
       </main>

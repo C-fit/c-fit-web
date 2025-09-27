@@ -6,6 +6,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Upload, FileText, Sparkles, Loader2 } from 'lucide-react';
+import { X } from 'lucide-react';
+import { useRouter } from 'next/navigation';
 
 type SavedItem = {
   id: string;
@@ -18,6 +20,7 @@ type SavedItem = {
 type UserShape = { name?: string | null; id?: string };
 
 export function DashboardBody({ user }: { user: UserShape }) {
+  const router = useRouter();
   // --- 이력서 업로드 ---
   const [file, setFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
@@ -82,6 +85,21 @@ export function DashboardBody({ user }: { user: UserShape }) {
     })();
   }, []);
 
+  // 삭제 핸들러
+  async function removeSaved(id: string) {
+    try {
+      const res = await fetch(`/api/saved?id=${encodeURIComponent(id)}`, {
+        method: 'DELETE',
+        credentials: 'include',
+      });
+      if (!res.ok) throw new Error('failed');
+      // 낙관적 업데이트
+      setSaved((prev) => prev.filter((s) => s.id !== id));
+    } catch {
+      alert('관심공고 해제에 실패했습니다. 잠시 후 다시 시도해 주세요.');
+    }
+  }
+
   // 업로드 실행
   async function handleUpload() {
     if (!file) return alert('PDF 파일을 선택해 주세요.');
@@ -120,13 +138,13 @@ export function DashboardBody({ user }: { user: UserShape }) {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
-        body: JSON.stringify({ jobUrl: item.url }),
+        body: JSON.stringify({ jobUrl: item.url, demoType: 'comparison' }),
       });
       if (!res.ok) throw new Error('analyze failed');
       const data = await res.json();
-      const resultId = data.resultId || data.id || '';
+      const resultId = data.resultId || data.id;
       if (resultId) {
-        window.location.href = `/analysis/${resultId}`;
+        router.push(`/analysis/${resultId}`);
       } else {
         alert('분석 요청이 접수되었습니다. 결과 페이지에서 확인해 주세요.');
       }
@@ -228,24 +246,48 @@ export function DashboardBody({ user }: { user: UserShape }) {
                   </Button>
                 </div>
               ) : (
-                <div className='grid sm:grid-cols-2 gap-3'>
+                <div className='grid grid-cols-1 sm:grid-cols-2 gap-3'>
                   {saved.slice(0, 8).map((it) => (
-                    <div key={it.id} className='p-3 rounded-lg border'>
-                      <div className='text-sm font-medium line-clamp-2'>
-                        {it.title}
+                    <div
+                      key={it.id}
+                      className='relative box-border overflow-hidden rounded-lg border bg-card p-3 max-w-full'
+                    >
+                      {/* 닫기(X) */}
+                      <button
+                        aria-label='관심공고 취소'
+                        className='absolute right-2 top-2 inline-flex h-7 w-7 items-center justify-center rounded-md hover:bg-muted/60'
+                        onClick={() => removeSaved(it.id)}
+                        title='관심 해제'
+                      >
+                        <X className='h-4 w-4' />
+                      </button>
+
+                      {/* 텍스트 영역 */}
+                      <div className='min-w-0 pr-8'>
+                        <div className='text-sm font-medium truncate'>
+                          {it.title}
+                        </div>
+                        <div className='text-xs text-muted-foreground mt-1 truncate'>
+                          {it.companyName} {it.jobName ? `· ${it.jobName}` : ''}
+                        </div>
                       </div>
-                      <div className='text-xs text-muted-foreground mt-1'>
-                        {it.companyName} {it.jobName ? `· ${it.jobName}` : ''}
-                      </div>
-                      <div className='flex items-center gap-2 mt-2'>
+
+                      {/* 액션 버튼들 */}
+                      <div className='mt-2 flex flex-wrap items-center gap-2'>
                         <Button
                           size='sm'
                           variant='outline'
+                          className='whitespace-nowrap'
                           onClick={() => window.open(it.url, '_blank')}
                         >
                           공고보기
                         </Button>
-                        <Button size='sm' onClick={() => analyzeFit(it)}>
+                        <Button
+                          size='sm'
+                          variant='gradient' // gradient variant 추가해두셨다면 사용, 아니면 'default'
+                          className='whitespace-nowrap'
+                          onClick={() => analyzeFit(it)}
+                        >
                           <Sparkles className='h-4 w-4 mr-1' />
                           FIT 분석하기
                         </Button>

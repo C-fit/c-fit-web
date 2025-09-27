@@ -1,6 +1,5 @@
 // Prisma Schema for C-FIT Project
 
-
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
@@ -10,52 +9,44 @@ generator client {
   provider = "prisma-client-js"
 }
 
-
-
 model User {
-  id        String    @id @default(cuid())
-  email     String    @unique
-  name      String?
-  passwordHash  String
+  id           String   @id @default(cuid())
+  email        String   @unique
+  name         String?
+  passwordHash String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 
-
-  resume    ResumeFile[]
-
-
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
-
-  savedJobs SavedJob[]
+  resumes    ResumeFile[]
+  savedJobs  SavedJob[]
+  fitResults FitResult[]
 }
 
-
-
 model JobPosting {
-  id               String    @id @default(cuid())
-  
-  companyName      String?
-  title            String
-  url              String    @unique
+  id String @id @default(cuid())
+
+  companyName String?
+  title       String
+  url         String  @unique
 
   // --- 필터링을 위한 핵심 필드 ---
-  jobName          String?   
+  jobName String?
 
-  experienceLevel  String?
-  careerYears      Int[]
+  experienceLevel String?
+  careerYears     Int[]
 
   // --- 상세 정보 (나중에 채울 필드) ---
-  description      String?   @db.Text
-  requirements     String?   @db.Text
-  preferred        String?   @db.Text
-  employmentType   String?
-  location         String?
-  deadline         String?
+  description    String? @db.Text
+  requirements   String? @db.Text
+  preferred      String? @db.Text
+  employmentType String?
+  location       String?
+  deadline       String?
 
-  vector           Unsupported("vector(1536)")?
-  crawledAt        DateTime  @default(now())
-  updatedAt        DateTime  @updatedAt
+  crawledAt DateTime                     @default(now())
+  updatedAt DateTime                     @updatedAt
 
-  savedBy          SavedJob[]
+  savedBy SavedJob[]
 }
 
 /**
@@ -63,34 +54,52 @@ model JobPosting {
  * (Many-to-Many 관계)
  */
 model SavedJob {
-  id             String    @id @default(cuid())
-  
-  userId         String    // User 모델의 외래 키
-  jobPostingId   String    // JobPosting 모델의 외래 키
-  
-  createdAt      DateTime  @default(now())
+  id String @id @default(cuid())
+
+  userId       String // User 모델의 외래 키
+  jobPostingId String // JobPosting 모델의 외래 키
+
+  createdAt DateTime @default(now())
 
   // 관계 정의: onDelete: Cascade는 사용자가 탈퇴하면 관련 관심 공고 기록도 함께 삭제되도록 합니다.
-  user           User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  jobPosting     JobPosting @relation(fields: [jobPostingId], references: [id], onDelete: Cascade)
+  user       User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  jobPosting JobPosting @relation(fields: [jobPostingId], references: [id], onDelete: Cascade)
 
   // 한 명의 유저가 동일한 공고를 중복해서 저장하는 것을 방지합니다.
   @@unique([userId, jobPostingId])
-
 }
 
 model ResumeFile {
   id           String   @id @default(cuid())
   userId       String
-  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-
   originalName String
-  storedPath   String     
+  storedPath   String
   mimeType     String
   size         Int
-
   createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+
+  user       User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  fitResults FitResult[]
+}
+
+model FitResult {
+  id              String   @id @default(cuid())
+  userId          String
+  resumeFileId    String?
+  jobUrl          String
+  score           Int?
+  summary         String?
+  strengths       String[] @default([])
+  gaps            String[] @default([])
+  recommendations String[] @default([])
+  raw             Json?
+  status          String   @default("completed")
+  createdAt       DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  resume ResumeFile? @relation(fields: [resumeFileId], references: [id], onDelete: SetNull)
 
   @@index([userId, createdAt])
+  @@index([jobUrl])
 }

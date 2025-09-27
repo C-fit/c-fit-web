@@ -1,8 +1,8 @@
-
 // src/app/api/saved/route.ts
 import { NextRequest, NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { prisma } from '@/lib/db';
+
 
 export const runtime = 'nodejs';
 
@@ -109,4 +109,20 @@ export async function POST(req: NextRequest) {
     });
     return NextResponse.json({ saved: false });
   }
+}
+
+export async function DELETE(req: NextRequest) {
+  const userId = await getOrCreateUserIdFromCookie();
+  if (!userId)
+    return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
+
+  const id = new URL(req.url).searchParams.get('id');
+  if (!id) return NextResponse.json({ error: 'id required' }, { status: 400 });
+
+  // 본인 소유만 안전하게 삭제 (없어도 에러 없이 넘어가도록)
+  const { count } = await prisma.savedJob.deleteMany({
+    where: { id, userId },
+  });
+
+  return NextResponse.json({ ok: true, deleted: count });
 }

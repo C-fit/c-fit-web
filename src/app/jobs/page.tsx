@@ -2,6 +2,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { Navigation } from '@/components/navigation';
 
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -156,286 +157,284 @@ export default function JobsPage() {
     : 1;
 
   return (
-    <div className='container mx-auto px-4 py-6 space-y-6'>
-      {/* 헤더: 제목 + 대시보드 / 초기화 */}
-      <div className='flex items-center justify-between gap-2 flex-wrap w-full'>
-        <h1 className='text-2xl font-semibold min-w-0'>채용공고 검색</h1>
-        <div className='flex items-center gap-2 shrink-0'>
-          <Link href='/dashboard' className='inline-flex'>
-            <Button variant='outline' className='h-9 whitespace-nowrap'>
-              대시보드
-            </Button>
-          </Link>
-          <Button
-            variant='ghost'
-            className='h-9 whitespace-nowrap'
-            onClick={clearFilters}
-            type='button'
-          >
-            필터 초기화
-          </Button>
-        </div>
-      </div>
-
-      {/* Filters */}
-      <div className='grid grid-cols-1 md:grid-cols-4 gap-4 items-end mt-2'>
-        <div className='space-y-1'>
-          <Label>검색어</Label>
-          <Input
-            placeholder='제목/회사/직무…'
-            value={q}
-            onChange={(e) => {
-              setQ(e.target.value);
-              setPage(1);
-            }}
-          />
-        </div>
-
-        {/* 직무 선택 (모달) */}
-        <div className='space-y-1 md:col-span-2'>
-          <Label>직무 선택</Label>
-
-          <Dialog open={jobOpen} onOpenChange={setJobOpen}>
-            <DialogTrigger asChild>
-              <Button variant='outline' className='rounded-full'>
-                {job.length === 0 ? '직무 선택' : `선택됨 ${job.length}개`}
-              </Button>
-            </DialogTrigger>
-
-            <DialogContent className='sm:max-w-[680px]'>
-              <DialogHeader>
-                <DialogTitle>직무 선택</DialogTitle>
-              </DialogHeader>
-
-              {/* 검색창 (선택사항) */}
-              <Input
-                placeholder='보유 직무를 검색하세요.'
-                value={jobQuery}
-                onChange={(e) => setJobQuery(e.target.value)}
-                className='mt-2'
-              />
-
-              {/* 태그(버튼) 목록 */}
-              <div className='mt-3 flex flex-wrap gap-2'>
-                {JOB_CATEGORIES.filter((v) =>
-                  jobQuery.trim()
-                    ? v.toLowerCase().includes(jobQuery.toLowerCase())
-                    : true
-                ).map((cat) => {
-                  const active = job.includes(cat);
-                  return (
-                    <Button
-                      key={cat}
-                      type='button'
-                      variant={active ? 'default' : 'outline'}
-                      className='h-9 rounded-full'
-                      onClick={() =>
-                        setJob((prev) =>
-                          prev.includes(cat)
-                            ? prev.filter((x) => x !== cat)
-                            : [...prev, cat]
-                        )
-                      }
-                    >
-                      {cat}
-                    </Button>
-                  );
-                })}
-              </div>
-
-              {/* 선택 결과 뱃지(선택사항) */}
-              {job.length > 0 && (
-                <div className='mt-3 flex flex-wrap gap-2'>
-                  {job.map((j) => (
-                    <Button
-                      key={j}
-                      type='button'
-                      variant='secondary'
-                      className='h-8 rounded-full pr-2'
-                      onClick={() =>
-                        setJob((prev) => prev.filter((x) => x !== j))
-                      }
-                    >
-                      <span className='mr-1'>{j}</span>
-                      <X className='size-4' />
-                    </Button>
-                  ))}
-                </div>
-              )}
-
-              <DialogFooter className='mt-4'>
-                <Button
-                  variant='ghost'
-                  onClick={() => {
-                    setJob([]);
-                    setJobQuery('');
-                    setPage(1);
-                  }}
-                >
-                  초기화
-                </Button>
-                <Button
-                  onClick={() => {
-                    setPage(1);
-                    setJobOpen(false); // 적용 후 닫기
-                  }}
-                >
-                  적용
-                </Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
-
-          {/* 요약 라벨(선택사항) */}
-          {job.length > 0 && (
-            <div className='text-sm text-muted-foreground'>
-              선택됨: {job.join(', ')}
-            </div>
-          )}
-        </div>
-
-        <div className='space-y-1'>
-          <Label>회사</Label>
-          <Input
-            placeholder="회사명"
-            value={company}
-            onChange={(e) => {
-              setCompany(e.target.value);
-              setPage(1);
-            }}
-          />
-        </div>
-
-        <div className='space-y-1'>
-          <Label>정렬</Label>
-          <Select
-            value={sort}
-            onValueChange={(v: 'recent' | 'company' | 'title') => {
-              setSort(v);
-              setPage(1);
-            }}
-          >
-            <SelectTrigger>
-              <SelectValue placeholder='정렬' />
-            </SelectTrigger>
-            <SelectContent
-              position='popper'
-              className='z-[70] bg-white dark:bg-neutral-900 border shadow-md'
+    <>
+      <Navigation />
+      <main className='container mx-auto px-4 py-6 space-y-6'>
+        {/* 헤더: 제목 + 대시보드 / 초기화 */}
+        <div className='flex items-center justify-between gap-2 flex-wrap w-full'>
+          <h1 className='text-2xl font-semibold min-w-0'>채용공고 검색</h1>
+          <div className='flex items-center gap-2 shrink-0'>
+            <Button
+              variant='ghost'
+              className='h-9 whitespace-nowrap'
+              onClick={clearFilters}
+              type='button'
             >
-              <SelectItem value='recent'>최신순</SelectItem>
-              <SelectItem value='company'>회사명</SelectItem>
-              <SelectItem value='title'>제목</SelectItem>
-            </SelectContent>
-          </Select>
+              필터 초기화
+            </Button>
+          </div>
         </div>
 
-        <div className='space-y-1 md:col-span-2'>
-          <Label>경력 구간 (년)</Label>
-          <div className="px-2">
-            <Slider
-              min={0}
-              max={20}
-              step={1}
-              value={years}
-              onValueChange={(v) => {
-                setYears([v[0], v[1]] as [number, number]);
+        {/* Filters */}
+        <div className='grid grid-cols-1 md:grid-cols-4 gap-4 items-end mt-2'>
+          <div className='space-y-1'>
+            <Label>검색어</Label>
+            <Input
+              placeholder='제목/회사/직무…'
+              value={q}
+              onChange={(e) => {
+                setQ(e.target.value);
                 setPage(1);
               }}
             />
           </div>
 
-          <div className='text-sm text-muted-foreground'>
-            선택: {years[0]} ~ {years[1]}년
+          {/* 직무 선택 (모달) */}
+          <div className='space-y-1 md:col-span-2'>
+            <Label>직무 선택</Label>
+
+            <Dialog open={jobOpen} onOpenChange={setJobOpen}>
+              <DialogTrigger asChild>
+                <Button variant='outline' className='rounded-full'>
+                  {job.length === 0 ? '직무 선택' : `선택됨 ${job.length}개`}
+                </Button>
+              </DialogTrigger>
+
+              <DialogContent className='sm:max-w-[680px]'>
+                <DialogHeader>
+                  <DialogTitle>직무 선택</DialogTitle>
+                </DialogHeader>
+
+                {/* 검색창 (선택사항) */}
+                <Input
+                  placeholder='보유 직무를 검색하세요.'
+                  value={jobQuery}
+                  onChange={(e) => setJobQuery(e.target.value)}
+                  className='mt-2'
+                />
+
+                {/* 태그(버튼) 목록 */}
+                <div className='mt-3 flex flex-wrap gap-2'>
+                  {JOB_CATEGORIES.filter((v) =>
+                    jobQuery.trim()
+                      ? v.toLowerCase().includes(jobQuery.toLowerCase())
+                      : true
+                  ).map((cat) => {
+                    const active = job.includes(cat);
+                    return (
+                      <Button
+                        key={cat}
+                        type='button'
+                        variant={active ? 'default' : 'outline'}
+                        className='h-9 rounded-full'
+                        onClick={() =>
+                          setJob((prev) =>
+                            prev.includes(cat)
+                              ? prev.filter((x) => x !== cat)
+                              : [...prev, cat]
+                          )
+                        }
+                      >
+                        {cat}
+                      </Button>
+                    );
+                  })}
+                </div>
+
+                {/* 선택 결과 뱃지(선택사항) */}
+                {job.length > 0 && (
+                  <div className='mt-3 flex flex-wrap gap-2'>
+                    {job.map((j) => (
+                      <Button
+                        key={j}
+                        type='button'
+                        variant='secondary'
+                        className='h-8 rounded-full pr-2'
+                        onClick={() =>
+                          setJob((prev) => prev.filter((x) => x !== j))
+                        }
+                      >
+                        <span className='mr-1'>{j}</span>
+                        <X className='size-4' />
+                      </Button>
+                    ))}
+                  </div>
+                )}
+
+                <DialogFooter className='mt-4'>
+                  <Button
+                    variant='ghost'
+                    onClick={() => {
+                      setJob([]);
+                      setJobQuery('');
+                      setPage(1);
+                    }}
+                  >
+                    초기화
+                  </Button>
+                  <Button
+                    onClick={() => {
+                      setPage(1);
+                      setJobOpen(false); // 적용 후 닫기
+                    }}
+                  >
+                    적용
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+
+            {/* 요약 라벨(선택사항) */}
+            {job.length > 0 && (
+              <div className='text-sm text-muted-foreground'>
+                선택됨: {job.join(', ')}
+              </div>
+            )}
           </div>
-        </div>
 
-        <div className="space-y-1">
-          <Label>경력 표기</Label>
-          <Select
-            value={exp}
-            onValueChange={(v: 'all' | '신입' | '경력무관') => {
-              setExp(v);
-
-              setPage(1);
-            }}
-          >
-            <SelectTrigger>
-              <SelectValue placeholder="전체" />
-            </SelectTrigger>
-            <SelectContent
-              position='popper'
-              className='z-[70] bg-white dark:bg-neutral-900 border shadow-md'
-            >
-              {/* ⛔️ 빈 문자열 금지: 'all'을 사용 */}
-              <SelectItem value='all'>전체</SelectItem>
-              <SelectItem value='신입'>신입</SelectItem>
-              <SelectItem value='경력무관'>경력무관</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-
-        {/* 우상단: 총 건수 / 페이지당 */}
-        <div className='space-y-1 md:col-span-1 md:justify-self-end flex items-end justify-between gap-3'>
-          <div className='text-sm text-muted-foreground'>
-            {loading ? '불러오는 중…' : data ? `총 ${data.total}건` : ''}
+          <div className='space-y-1'>
+            <Label>회사</Label>
+            <Input
+              placeholder='회사명'
+              value={company}
+              onChange={(e) => {
+                setCompany(e.target.value);
+                setPage(1);
+              }}
+            />
           </div>
-          <div className='flex items-center gap-2'>
-            <Label className='text-sm'>페이지당</Label>
+
+          <div className='space-y-1'>
+            <Label>정렬</Label>
             <Select
-              value={String(pageSize)}
-              onValueChange={(v) => {
-                setPageSize(Number(v));
+              value={sort}
+              onValueChange={(v: 'recent' | 'company' | 'title') => {
+                setSort(v);
                 setPage(1);
               }}
             >
-              <SelectTrigger className='w-24'>
-                <SelectValue />
+              <SelectTrigger>
+                <SelectValue placeholder='정렬' />
               </SelectTrigger>
               <SelectContent
                 position='popper'
                 className='z-[70] bg-white dark:bg-neutral-900 border shadow-md'
               >
-                <SelectItem value='10'>10</SelectItem>
-                <SelectItem value='20'>20</SelectItem>
-                <SelectItem value='50'>50</SelectItem>
+                <SelectItem value='recent'>최신순</SelectItem>
+                <SelectItem value='company'>회사명</SelectItem>
+                <SelectItem value='title'>제목</SelectItem>
               </SelectContent>
             </Select>
           </div>
+
+          <div className='space-y-1 md:col-span-2'>
+            <Label>경력 구간 (년)</Label>
+            <div className='px-2'>
+              <Slider
+                min={0}
+                max={20}
+                step={1}
+                value={years}
+                onValueChange={(v) => {
+                  setYears([v[0], v[1]] as [number, number]);
+                  setPage(1);
+                }}
+              />
+            </div>
+
+            <div className='text-sm text-muted-foreground'>
+              선택: {years[0]} ~ {years[1]}년
+            </div>
+          </div>
+
+          <div className='space-y-1'>
+            <Label>경력 표기</Label>
+            <Select
+              value={exp}
+              onValueChange={(v: 'all' | '신입' | '경력무관') => {
+                setExp(v);
+
+                setPage(1);
+              }}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder='전체' />
+              </SelectTrigger>
+              <SelectContent
+                position='popper'
+                className='z-[70] bg-white dark:bg-neutral-900 border shadow-md'
+              >
+                {/* ⛔️ 빈 문자열 금지: 'all'을 사용 */}
+                <SelectItem value='all'>전체</SelectItem>
+                <SelectItem value='신입'>신입</SelectItem>
+                <SelectItem value='경력무관'>경력무관</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* 우상단: 총 건수 / 페이지당 */}
+          <div className='space-y-1 md:col-span-1 md:justify-self-end flex items-end justify-between gap-3'>
+            <div className='text-sm text-muted-foreground'>
+              {loading ? '불러오는 중…' : data ? `총 ${data.total}건` : ''}
+            </div>
+            <div className='flex items-center gap-2'>
+              <Label className='text-sm'>페이지당</Label>
+              <Select
+                value={String(pageSize)}
+                onValueChange={(v) => {
+                  setPageSize(Number(v));
+                  setPage(1);
+                }}
+              >
+                <SelectTrigger className='w-24'>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent
+                  position='popper'
+                  className='z-[70] bg-white dark:bg-neutral-900 border shadow-md'
+                >
+                  <SelectItem value='10'>10</SelectItem>
+                  <SelectItem value='20'>20</SelectItem>
+                  <SelectItem value='50'>50</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
         </div>
-      </div>
 
-      {/* Results */}
-      <div className='grid sm:grid-cols-2 lg:grid-cols-3 gap-4'>
-        {data?.items.map((it) => (
-          <JobCard key={it.id} item={it} />
-        ))}
-      </div>
-
-      {/* Pagination */}
-      <div className='flex items-center justify-center gap-3 pt-2'>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => setPage((p) => Math.max(1, p - 1))}
-          disabled={page <= 1 || loading}
-        >
-          이전
-        </Button>
-
-        <div className='text-sm'>
-          페이지 {page} / {totalPages}
+        {/* Results */}
+        <div className='grid sm:grid-cols-2 lg:grid-cols-3 gap-4'>
+          {data?.items.map((it) => (
+            <JobCard key={it.id} item={it} />
+          ))}
         </div>
-        <Button
-          variant='outline'
-          size='sm'
-          onClick={() => {
-            if (page < totalPages) setPage((p) => p + 1);
-          }}
-          disabled={loading || page >= totalPages}
-        >
-          다음
-        </Button>
-      </div>
-    </div>
+
+        {/* Pagination */}
+        <div className='flex items-center justify-center gap-3 pt-2'>
+          <Button
+            variant='outline'
+            size='sm'
+            onClick={() => setPage((p) => Math.max(1, p - 1))}
+            disabled={page <= 1 || loading}
+          >
+            이전
+          </Button>
+
+          <div className='text-sm'>
+            페이지 {page} / {totalPages}
+          </div>
+          <Button
+            variant='outline'
+            size='sm'
+            onClick={() => {
+              if (page < totalPages) setPage((p) => p + 1);
+            }}
+            disabled={loading || page >= totalPages}
+          >
+            다음
+          </Button>
+        </div>
+      </main>
+    </>
   );
 }
