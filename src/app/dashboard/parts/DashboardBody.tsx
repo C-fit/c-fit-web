@@ -17,6 +17,13 @@ type SavedItem = {
   jobName?: string | null;
 };
 
+type ResumeMeta = {
+  id: string;
+  originalName: string;
+  size: number;
+  createdAt: string;
+};
+
 type UserShape = { name?: string | null; id?: string };
 
 export function DashboardBody({ user }: { user: UserShape }) {
@@ -27,6 +34,11 @@ export function DashboardBody({ user }: { user: UserShape }) {
   const [resumeOk, setResumeOk] = useState<boolean>(false);
   const dropRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const [resumeMeta, setResumeMeta] = useState<ResumeMeta | null>(null);
+  const fmtBytes = (n: number) =>
+    n >= 1024 * 1024
+      ? `${(n / (1024 * 1024)).toFixed(2)} MB`
+      : `${Math.max(1, Math.round(n / 1024))} KB`;
 
   // --- 관심 공고 목록 ---
   const [saved, setSaved] = useState<SavedItem[]>([]);
@@ -66,6 +78,31 @@ export function DashboardBody({ user }: { user: UserShape }) {
     };
   }, []);
 
+  useEffect(() => {
+    (async () => {
+      try {
+        const res = await fetch('/api/resume', {
+          cache: 'no-store',
+          credentials: 'include',
+        });
+        const json = await res.json();
+        setResumeOk(!!json.latest?.id); // 최신 이력서가 있으면 true
+      } catch {}
+    })();
+  }, []);
+  useEffect(() => {
+    (async () => {
+      try {
+        const res = await fetch('/api/resume', {
+          cache: 'no-store',
+          credentials: 'include',
+        });
+        const json = await res.json();
+        setResumeOk(!!json.latest?.id); // 최신 이력서가 있으면 true
+      } catch {}
+    })();
+  }, []);
+
   // 관심 공고 불러오기
   useEffect(() => {
     (async () => {
@@ -81,6 +118,29 @@ export function DashboardBody({ user }: { user: UserShape }) {
         setSaved([]);
       } finally {
         setSavedLoading(false);
+      }
+    })();
+  }, []);
+
+  // 페이지 진입 시 최신 이력서 메타 받기
+  useEffect(() => {
+    (async () => {
+      try {
+        const res = await fetch('/api/resume', {
+          cache: 'no-store',
+          credentials: 'include',
+        });
+        const json = await res.json();
+        const latest = json?.latest;
+        if (latest?.id) {
+          setResumeMeta(latest);
+          setResumeOk(true);
+        } else {
+          setResumeMeta(null);
+          setResumeOk(false);
+        }
+      } catch {
+        setResumeMeta(null);
       }
     })();
   }, []);
@@ -115,12 +175,36 @@ export function DashboardBody({ user }: { user: UserShape }) {
         credentials: 'include',
       });
       if (!res.ok) throw new Error('upload failed');
+      const json = await res.json().catch(() => ({}));
+      // 최신 메타 갱신
+      if (json?.latest) {
+        setResumeMeta(json.latest);
+      }
       setResumeOk(true);
       alert('이력서가 업로드되었습니다.');
     } catch {
       alert('업로드에 실패했습니다. 잠시 후 다시 시도해 주세요.');
     } finally {
       setUploading(false);
+    }
+  }
+
+  // 업로드된 이력서 삭제
+  async function removeResume() {
+    const go = confirm('업로드된 이력서를 삭제할까요?');
+    if (!go) return;
+    try {
+      const res = await fetch('/api/resume', {
+        method: 'DELETE',
+        credentials: 'include',
+      });
+      if (!res.ok) throw new Error();
+      setResumeMeta(null);
+      setResumeOk(false);
+      setFile(null);
+      alert('삭제되었습니다. 새로운 이력서를 업로드해 주세요.');
+    } catch {
+      alert('삭제에 실패했습니다. 잠시 후 다시 시도해 주세요.');
     }
   }
 
@@ -138,7 +222,7 @@ export function DashboardBody({ user }: { user: UserShape }) {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
-        body: JSON.stringify({ jobUrl: item.url, demoType: 'comparison' }),
+        body: JSON.stringify({ jobUrl: item.url }),
       });
       if (!res.ok) throw new Error('analyze failed');
       const data = await res.json();
@@ -177,9 +261,39 @@ export function DashboardBody({ user }: { user: UserShape }) {
               </CardTitle>
             </CardHeader>
             <CardContent className='space-y-4'>
+              {/* 현재 업로드된 이력서 표시 + 삭제 버튼 */}
+              {resumeMeta && (
+                <div className='flex items-center justify-between rounded-md border p-3 bg-muted/40'>
+                  <div className='min-w-0'>
+                    <div className='font-medium truncate'>
+                      {resumeMeta.originalName}
+                    </div>
+                    <div className='text-xs text-muted-foreground'>
+                      {fmtBytes(resumeMeta.size)} ·{' '}
+                      {new Date(resumeMeta.createdAt).toLocaleString()}
+                    </div>
+                  </div>
+                  <Button
+                    variant='ghost'
+                    size='icon'
+                    onClick={removeResume}
+                    className='hover:bg-destructive/10 text-destructive'
+                    title='이력서 삭제'
+                  >
+                    <X className='h-4 w-4' />
+                  </Button>
+                </div>
+              )}
+
+              {/* 드롭존: 이미 업로드가 있으면 비활성 안내 */}
               <div
-                className='border-2 border-dashed rounded-xl p-6 text-center hover:bg-muted/50 transition-colors cursor-pointer'
-                onClick={() => inputRef.current?.click()}
+                className={
+                  'border-2 border-dashed rounded-xl p-6 text-center transition-colors ' +
+                  (resumeMeta
+                    ? 'opacity-50 pointer-events-none'
+                    : 'hover:bg-muted/50 cursor-pointer')
+                }
+                onClick={() => !resumeMeta && inputRef.current?.click()}
               >
                 <p className='text-sm text-muted-foreground'>
                   이곳에 파일을 드래그 앤 드롭하거나 클릭하여 선택하세요.
@@ -187,6 +301,12 @@ export function DashboardBody({ user }: { user: UserShape }) {
                 <p className='text-xs text-muted-foreground mt-1'>
                   PDF만 가능, 최대 20MB 권장
                 </p>
+                {resumeMeta && (
+                  <p className='text-xs text-muted-foreground mt-2'>
+                    새로운 파일을 올리려면 위의 <b>X</b>로 삭제한 뒤
+                    업로드하세요.
+                  </p>
+                )}
               </div>
 
               <div className='flex items-center gap-2'>
@@ -200,13 +320,18 @@ export function DashboardBody({ user }: { user: UserShape }) {
                     const f = e.target.files?.[0];
                     if (f) setFile(f);
                   }}
+                  disabled={!!resumeMeta}
                 />
                 <Input
                   readOnly
                   value={file ? file.name : ''}
                   placeholder='선택된 파일이 없습니다.'
+                  disabled={!!resumeMeta}
                 />
-                <Button onClick={handleUpload} disabled={uploading}>
+                <Button
+                  onClick={handleUpload}
+                  disabled={uploading || !!resumeMeta || !file}
+                >
                   {uploading ? (
                     <Loader2 className='h-4 w-4 animate-spin mr-2' />
                   ) : null}
@@ -214,7 +339,7 @@ export function DashboardBody({ user }: { user: UserShape }) {
                 </Button>
               </div>
 
-              {resumeOk && (
+              {resumeOk && !resumeMeta && (
                 <div className='text-sm text-green-600'>
                   이력서 업로드 완료 ✅
                 </div>
