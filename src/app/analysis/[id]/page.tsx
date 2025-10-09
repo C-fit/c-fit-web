@@ -1,12 +1,16 @@
 import { redirect } from 'next/navigation';
-import { getSession } from '@/lib/auth';
+import { getSession } from '@/lib/auth'; // 사용 중인 세션 헬퍼에 맞춰서
 import AnalysisClient from '@/components/analysis/analysis-client';
 
-export default async function AnalysisPage(
-  props: { params: Promise<{ id: string }> } // ✅ Next 최신: params는 Promise일 수 있음
-) {
-  const { id } = await props.params; // ✅ 반드시 await
-  const session = await getSession().catch(() => null);
-  if (!session?.user) redirect(`/login?next=/analysis/${id}`);
+type PageProps = { params: Promise<{ id: string }> };
+
+export default async function AnalysisPage({ params }: PageProps) {
+  const { id } = await params;
+
+  const session = await getSession();
+  if (!session?.user) {
+    redirect(`/login?next=/analysis/${id}`);
+  }
+
   return <AnalysisClient resultId={id} />;
 }
