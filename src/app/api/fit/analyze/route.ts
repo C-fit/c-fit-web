@@ -2,12 +2,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { getOrCreateUserIdFromCookie } from '@/server/auth';
-import { promises as fs } from 'fs';
 import { randomUUID } from 'crypto';
 
 export const runtime = 'nodejs';
-
-
 
 const BASE =
   process.env.LLM_API_BASE ??
@@ -17,21 +14,26 @@ const KEY_HEADER = process.env.LLM_API_KEY_HEADER ?? 'Authorization';
 const TIMEOUT_MS = Number(process.env.TIMEOUT_MS ?? 1200000);
 const DEBUG = (process.env.DEBUG_FIT ?? '0') === '1';
 
-// 단계별 타임아웃 (없으면 TIMEOUT_MS, 그마저 없으면 120초)
-const RES_T = Number(process.env.RESUME_TIMEOUT_MS ?? process.env.TIMEOUT_MS ?? 480000);
-const JD_T  = Number(process.env.JD_TIMEOUT_MS ?? process.env.TIMEOUT_MS ?? 480000);
-const FIT_T = Number(process.env.FIT_TIMEOUT_MS ?? process.env.TIMEOUT_MS ?? 480000);
+// 단계별 타임아웃
+const RES_T = Number(
+  process.env.RESUME_TIMEOUT_MS ?? process.env.TIMEOUT_MS ?? 480000
+);
+const JD_T = Number(
+  process.env.JD_TIMEOUT_MS ?? process.env.TIMEOUT_MS ?? 480000
+);
+const FIT_T = Number(
+  process.env.FIT_TIMEOUT_MS ?? process.env.TIMEOUT_MS ?? 480000
+);
 
-
-const log = (...a: any[]) => {
+const log = (...a: unknown[]) => {
   if (DEBUG) console.log('[FIT]', ...a);
 };
-const authHeaders = () =>
-  !KEY
-    ? {}
-    : KEY_HEADER.toLowerCase() === 'authorization'
-    ? { Authorization: `Bearer ${KEY}` }
-    : { [KEY_HEADER]: KEY };
+const authHeaders = (): Record<string, string> => {
+  if (!KEY) return {};
+  if (KEY_HEADER.toLowerCase() === 'authorization')
+    return { Authorization: `Bearer ${KEY}` };
+  return { [KEY_HEADER]: KEY };
+};
 
 async function fetchText(
   url: string,
@@ -57,12 +59,50 @@ async function fetchText(
   }
 }
 
+/** storedPath가 URL이면 fetch, 로컬 경로면 fs에서 읽어 Blob 생성 */
+async function loadPdfBlob(
+  storedPath: string,
+  mimeHint?: string
+): Promise<{ blob: Blob; size: number; mime: string }> {
+  const isUrl =
+    /^https?:\/\//i.test(storedPath) || /^s3:\/\//i.test(storedPath);
+  if (isUrl) {
+    const r = await fetch(storedPath, { cache: 'no-store' });
+    if (!r.ok)
+      throw new Error(`blob fetch failed: ${r.status} ${r.statusText}`);
+    const arr = await r.arrayBuffer();
+    const mime = mimeHint || r.headers.get('content-type') || 'application/pdf';
+    return {
+      blob: new Blob([arr], { type: mime }),
+      size: arr.byteLength,
+      mime,
+    };
+  }
+
+  // 로컬 파일 (개발용)
+  const { readFile } = await import('fs/promises');
+  const buf = await readFile(storedPath); // Buffer
+
+  // ✅ 타입 안전: Buffer → Uint8Array 로 변환
+  const uint8 = new Uint8Array(buf.byteLength);
+  uint8.set(buf);
+
+  const mime = mimeHint || 'application/pdf';
+  return {
+    blob: new Blob([uint8], { type: mime }),
+    size: uint8.byteLength,
+    mime,
+  };
+}
+
 export async function POST(req: NextRequest) {
   const userId = await getOrCreateUserIdFromCookie();
   if (!userId)
     return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
 
-  const { jobUrl } = await req.json().catch(() => ({} as any));
+  const { jobUrl } = (await req.json().catch(() => ({}))) as {
+    jobUrl?: string;
+  };
   if (!jobUrl)
     return NextResponse.json({ error: 'jobUrl required' }, { status: 400 });
 
@@ -74,41 +114,46 @@ export async function POST(req: NextRequest) {
   if (!latest)
     return NextResponse.json({ error: 'resume not found' }, { status: 404 });
 
-  const buf = await fs.readFile(latest.storedPath);
-  const blob = new Blob([buf], { type: latest.mimeType || 'application/pdf' });
+  // Blob 준비
+  const {
+    blob: pdfBlob,
+    size: pdfSize,
+    mime: pdfMime,
+  } = await loadPdfBlob(
+    latest.storedPath,
+    latest.mimeType || 'application/pdf'
+  );
 
   const threadId = randomUUID();
   let step: 'resume' | 'jd' | 'fit' | 'save' = 'resume';
 
   try {
-    // A) /process/resume  (multipart/form-data)
+    // A) /process/resume (multipart/form-data)
     {
       const fd = new FormData();
       fd.set('thread_id', threadId);
-
-      // ✅ 파일명은 ASCII로 고정
-      const safeName = 'resume.pdf';
-      fd.set('resume_file', blob, safeName);
+      fd.set('resume_file', pdfBlob, 'resume.pdf');
 
       log('A start /process/resume', {
         url: `${BASE}/process/resume`,
         threadId,
-        file: safeName,
-        size: buf.length,
-        mime: blob.type,
+        file: 'resume.pdf',
+        size: pdfSize,
+        mime: pdfMime,
       });
 
+      // ✅ 헤더는 Headers로 생성 → HeadersInit 보장
+      const headersA = new Headers(authHeaders());
       const a = await fetchText(`${BASE}/process/resume`, {
         method: 'POST',
-        headers: authHeaders(), // Content-Type은 FormData가 자동 설정
+        headers: headersA,
         body: fd,
-        timeoutMs: RES_T, // (있다면 단계별 타임아웃)
+        timeoutMs: RES_T,
       });
 
       log('A done', {
         status: a.status,
         ms: a.ms,
-        // 응답 헤더/타입도 같이 참고 (문자열 200자만 찍음)
         ct: a.headers.get('content-type'),
         bodyPeek: a.text.slice(0, 200),
       });
@@ -120,7 +165,7 @@ export async function POST(req: NextRequest) {
 
     // B) /process/jd (x-www-form-urlencoded)
     step = 'jd';
-    const form = new URLSearchParams({
+    const bForm = new URLSearchParams({
       thread_id: String(threadId),
       jd_url: jobUrl,
     });
@@ -129,14 +174,15 @@ export async function POST(req: NextRequest) {
       threadId,
       jd_url: jobUrl,
     });
+
+    const headersB = new Headers(authHeaders());
+    headersB.set('Content-Type', 'application/x-www-form-urlencoded');
+
     const b = await fetchText(`${BASE}/process/jd`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
-        ...authHeaders(),
-      },
-      body: form.toString(),
-        timeoutMs: JD_T,  
+      headers: headersB,
+      body: bForm.toString(),
+      timeoutMs: JD_T,
     });
     log('B done', {
       status: b.status,
@@ -152,12 +198,13 @@ export async function POST(req: NextRequest) {
     step = 'fit';
     const cForm = new URLSearchParams({ thread_id: String(threadId) });
     log('C start /analyze/fit', { url: `${BASE}/analyze/fit`, threadId });
+
+    const headersC = new Headers(authHeaders());
+    headersC.set('Content-Type', 'application/x-www-form-urlencoded');
+
     const c = await fetchText(`${BASE}/analyze/fit`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
-        ...authHeaders(),
-      },
+      headers: headersC,
       body: cForm.toString(),
       timeoutMs: FIT_T,
     });
@@ -171,7 +218,7 @@ export async function POST(req: NextRequest) {
         `C failed: HTTP ${c.status} ${c.statusText} :: ${c.text}`
       );
 
-    // D) 결과 저장 (문자열 원문 → 클라 파서)
+    // D) 결과 저장
     step = 'save';
     const created = await prisma.fitResult.create({
       data: {
@@ -193,21 +240,18 @@ export async function POST(req: NextRequest) {
       resultId: created.id,
       rawLen: c.text.length,
     });
+
     return NextResponse.json({
       ok: true,
       resultId: created.id,
       status: 'completed',
       thread_id: threadId,
     });
-  } catch (e: any) {
-    log('✗ Failed', { step, threadId, error: String(e?.message ?? e) });
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : String(e);
+    log('✗ Failed', { step, threadId, error: msg });
     return NextResponse.json(
-      {
-        error: 'upstream failed',
-        step,
-        thread_id: threadId,
-        detail: String(e?.message ?? e),
-      },
+      { error: 'upstream failed', step, thread_id: threadId, detail: msg },
       { status: 502 }
     );
   }
