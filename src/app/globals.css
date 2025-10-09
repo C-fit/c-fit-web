@@ -1,4 +1,9 @@
-@import 'tailwindcss';
+/* src/app/globals.css */
+
+/* Tailwind v3 기본 디렉티브 */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
 
 /* ===== Light theme base + Brand ===== */
 :root {
@@ -12,65 +17,51 @@
   --brand-d: #b726a2; /* magenta */
 
   /* Semantic tokens */
-  --primary:            #6360b3; /* 컴포넌트 기본색은 인디고 톤 */
+  --primary: #6360b3; /* 컴포넌트 기본색은 인디고 톤 */
   --primary-foreground: #ffffff;
-  --accent:             #2fb1b8; /* 포커스/링 등 포인트 */
-  --muted:              #e8f6f5; /* 연한 민트 배경 */
+  --accent: #2fb1b8; /* 포커스/링 등 포인트 */
+  --muted: #e8f6f5; /* 연한 민트 배경 */
 }
 
-/* Tailwind v4 tokens (no tailwind.config.ts needed) */
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
+/* dark 모드는 class 기반(NextThemes) */
+.dark {
+  --background: #0a0a0a;
+  --foreground: #ededed;
 
-  --color-primary: var(--primary);
-  --color-primary-foreground: var(--primary-foreground);
-  --color-accent: var(--accent);
-  --color-muted: var(--muted);
+  --brand-a: #61d3cb; /* brighter teal for dark */
+  --brand-b: #5aa0f0; /* brighter blue */
+  --brand-c: #8a84ea; /* brighter indigo */
+  --brand-d: #d14ab8; /* brighter magenta */
 
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --primary: #9ea1ff; /* 어두운 배경에서 더 밝게 */
+  --primary-foreground: #1b1630;
+  --accent: #61d3cb;
+  --muted: #1a2225;
 }
 
-/* ===== Dark theme overrides ===== */
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-
-    --brand-a: #61d3cb; /* brighter teal for dark */
-    --brand-b: #5aa0f0; /* brighter blue */
-    --brand-c: #8a84ea; /* brighter indigo */
-    --brand-d: #d14ab8; /* brighter magenta */
-
-    --primary:            #9ea1ff;  /* 어두운 배경에서 더 밝게 */
-    --primary-foreground: #1b1630;
-    --accent:             #61d3cb;
-    --muted:              #1a2225;
-  }
-}
-
-/* Custom utilities (Tailwind v4) */
-@utility bg-brand-gradient {
-  background-image: linear-gradient(
-    90deg,
-    var(--brand-a),
-    var(--brand-b),
-    var(--brand-c),
-    var(--brand-d)
-  );
-}
-
-@utility text-brand-gradient {
-  background-image: linear-gradient(90deg, var(--brand-from), var(--brand-to));
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
-}
-
-/* Base */
+/* 기본 바디 */
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-geist-sans), Arial, Helvetica, sans-serif;
+}
+
+/* ===== v3용 커스텀 유틸리티 ===== */
+@layer utilities {
+  .bg-brand-gradient {
+    background-image: linear-gradient(
+      90deg,
+      var(--brand-a),
+      var(--brand-b),
+      var(--brand-c),
+      var(--brand-d)
+    );
+  }
+
+  .text-brand-gradient {
+    background-image: linear-gradient(90deg, var(--brand-a), var(--brand-d));
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
 }
