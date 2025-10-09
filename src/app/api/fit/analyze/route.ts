@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { getOrCreateUserIdFromCookie } from '@/server/auth';
 import { randomUUID } from 'crypto';
+import { Blob as NodeBlob } from 'buffer';
 
 export const runtime = 'nodejs';
 
@@ -59,38 +60,54 @@ async function fetchText(
   }
 }
 
-/** storedPath가 URL이면 fetch, 로컬 경로면 fs에서 읽어 Blob 생성 */
 async function loadPdfBlob(
   storedPath: string,
   mimeHint?: string
 ): Promise<{ blob: Blob; size: number; mime: string }> {
   const isUrl =
     /^https?:\/\//i.test(storedPath) || /^s3:\/\//i.test(storedPath);
+
   if (isUrl) {
-    const r = await fetch(storedPath, { cache: 'no-store' });
+    // Vercel Blob (private) 대비: 토큰이 있으면 헤더에 붙임
+    const headers = new Headers();
+    if (process.env.BLOB_READ_WRITE_TOKEN) {
+      headers.set(
+        'Authorization',
+        `Bearer ${process.env.BLOB_READ_WRITE_TOKEN}`
+      );
+    }
+
+    const r = await fetch(storedPath, { cache: 'no-store', headers });
     if (!r.ok)
       throw new Error(`blob fetch failed: ${r.status} ${r.statusText}`);
-    const arr = await r.arrayBuffer();
+
+    // ✅ fetch.arrayBuffer() 는 순수 ArrayBuffer
+    const ab: ArrayBuffer = await r.arrayBuffer();
     const mime = mimeHint || r.headers.get('content-type') || 'application/pdf';
+
+    // ✅ ArrayBuffer를 그대로 BlobPart로 사용 (타입 안전)
     return {
-      blob: new Blob([arr], { type: mime }),
-      size: arr.byteLength,
+      blob: new NodeBlob([ab], { type: mime }) as unknown as Blob,
+      size: ab.byteLength,
       mime,
     };
   }
 
-  // 로컬 파일 (개발용)
+  // ⬇️ 로컬 파일 (개발용)
   const { readFile } = await import('fs/promises');
-  const buf = await readFile(storedPath); // Buffer
+  const buf = await readFile(storedPath); // Node.Buffer (Uint8Array 서브클래스)
 
-  // ✅ 타입 안전: Buffer → Uint8Array 로 변환
-  const uint8 = new Uint8Array(buf.byteLength);
-  uint8.set(buf);
+  // ✅ Buffer → 정확한 ArrayBuffer 로 변환 + 타입 좁히기
+  const ab: ArrayBuffer = buf.buffer.slice(
+    buf.byteOffset,
+    buf.byteOffset + buf.byteLength
+  ) as ArrayBuffer;
 
   const mime = mimeHint || 'application/pdf';
+
   return {
-    blob: new Blob([uint8], { type: mime }),
-    size: uint8.byteLength,
+    blob: new NodeBlob([ab], { type: mime }) as unknown as Blob,
+    size: buf.length,
     mime,
   };
 }

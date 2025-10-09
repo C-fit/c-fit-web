@@ -95,12 +95,14 @@ export async function GET(req: Request) {
 
   // 로그인 사용자의 즐겨찾기 표시
   const session = await getSession();
+  const uid = session?.user?.id ?? null;
+
   let savedSet = new Set<string>();
-  if (session?.userId && items.length) {
+  if (uid && items.length) {
     const saved = await prisma.savedJob.findMany({
       where: {
-        userId: session.userId,
-        jobPostingId: { in: items.map((it) => it.id) },
+        userId: uid,
+        jobPostingId: { in: items.map((i) => i.id) },
       },
       select: { jobPostingId: true },
     });

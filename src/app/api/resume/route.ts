@@ -42,7 +42,7 @@ export async function POST(req: NextRequest) {
 
   // Blob에 업로드 (private)
   const blob = await put(key, file, {
-    access: 'private',
+    access: 'public',
     contentType: file.type || 'application/pdf',
     addRandomSuffix: false,
   });
