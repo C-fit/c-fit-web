@@ -1,55 +1,39 @@
-import { NextResponse } from 'next/server';
-import { cookies } from 'next/headers';
-import { prisma } from '@/lib/db';
+import { NextRequest, NextResponse } from 'next/server';
 import bcrypt from 'bcryptjs';
-import { SignJWT } from 'jose';
+import { prisma } from '@/lib/db';
+import { setSessionCookie, type SessionUser } from '@/lib/auth';
 
-const key = new TextEncoder().encode(process.env.JWT_SECRET || 'dev-secret');
+export async function POST(req: NextRequest) {
+  const body = await req.json().catch(() => ({} as Record<string, unknown>));
+  const email =
+    typeof body?.email === 'string' ? body.email.trim().toLowerCase() : '';
+  const pw = typeof body?.password === 'string' ? body.password : '';
 
-export async function POST(req: Request) {
-  const { email, password } = await req.json();
-
-  const emailN = String(email ?? '')
-    .toLowerCase()
-    .trim();
-  const pw = String(password ?? '');
-
-  if (!emailN || !pw) {
-    return NextResponse.json({ error: 'INVALID_INPUT' }, { status: 400 });
+  if (!email || !pw) {
+    return NextResponse.json({ error: 'MISSING_CREDENTIALS' }, { status: 400 });
   }
 
-  const user = await prisma.user.findUnique({ where: { email: emailN } });
-  if (!user) {
+  // 1) 사용자 조회
+  const user = await prisma.user.findUnique({ where: { email } });
+
+  // 2) 비밀번호 해시 확인 (null 가능성 처리)
+  const hash: string | null = user?.passwordHash ?? null;
+  if (!user || !hash) {
     return NextResponse.json({ error: 'INVALID_CREDENTIALS' }, { status: 401 });
   }
 
-  // 가입 시 해시 저장했다고 가정하고, 여기서 비교
-  const ok = await bcrypt.compare(pw, user.passwordHash);
+  const ok = await bcrypt.compare(pw, hash);
   if (!ok) {
     return NextResponse.json({ error: 'INVALID_CREDENTIALS' }, { status: 401 });
   }
 
-  // JWT 세션 발급 후 쿠키에 저장(Next 15: await cookies())
-  const expMs = Date.now() + 24 * 60 * 60 * 1000;
-  const token = await new SignJWT({
-    user: { id: user.id, email: user.email, name: user.name },
-  })
-    .setProtectedHeader({ alg: 'HS256' })
-    .setIssuedAt()
-    .setExpirationTime('24h')
-    .sign(key);
+  // 3) 세션 쿠키 설정
+  const sessUser: SessionUser = {
+    id: user.id,
+    email: user.email,
+    name: user.name,
+  };
+  await setSessionCookie(sessUser);
 
-  const jar = await cookies();
-  jar.set('session', token, {
-    httpOnly: true,
-    sameSite: 'lax',
-    path: '/',
-    expires: new Date(expMs),
-  });
-
-  // 프론트 컨텍스트가 바로 setUser() 하도록 user도 반환
-  return NextResponse.json({
-    ok: true,
-    user: { id: user.id, email: user.email, name: user.name },
-  });
+  return NextResponse.json({ ok: true, user: sessUser });
 }

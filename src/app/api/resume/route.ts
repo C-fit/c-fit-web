@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { getOrCreateUserIdFromCookie } from '@/server/auth';
 import { put, del } from '@vercel/blob';
-import { randomUUID } from 'crypto'; 
+import { randomUUID } from 'crypto'; // ✅ 추가
 
 export const runtime = 'nodejs';
 
@@ -14,6 +14,11 @@ function sanitizeName(name: string) {
 // GET: 최신 이력서 메타만 리턴
 export async function GET() {
   const userId = await getOrCreateUserIdFromCookie();
+  if (!userId)
+    return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
+
+  const latest = await prisma.resumeFile.findFirst({
+    where: { userId },
     orderBy: { createdAt: 'desc' },
     select: { id: true, originalName: true, size: true, createdAt: true },
   });
@@ -21,7 +26,7 @@ export async function GET() {
   return NextResponse.json({ latest: latest ?? null });
 }
 
-// POST: multipart/form-data { resume: File } → Blob에 저장 → DB 기록
+// POST: multipart/form-data { resume: File } → Blob에 저장 → DB 기록(✅ raw insert)
 export async function POST(req: NextRequest) {
   const userId = await getOrCreateUserIdFromCookie();
   if (!userId)

@@ -3,6 +3,7 @@
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
 }
 
 generator client {
@@ -77,6 +78,7 @@ model ResumeFile {
   mimeType     String
   size         Int
   createdAt    DateTime @default(now())
+  
 
   user       User        @relation(fields: [userId], references: [id], onDelete: Cascade)
   fitResults FitResult[]
