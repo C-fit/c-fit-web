@@ -1,7 +1,9 @@
+// src/app/api/resume/route.ts
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { getOrCreateUserIdFromCookie } from '@/server/auth';
 import { put, del } from '@vercel/blob';
+import { randomUUID } from 'crypto'; // ✅ 추가
 
 export const runtime = 'nodejs';
 
@@ -9,7 +11,7 @@ function sanitizeName(name: string) {
   return name.replace(/[^\w.\-]+/g, '_');
 }
 
-// GET: 최신 이력서 메타만 리턴(파일 URL은 비공개 보관)
+// GET: 최신 이력서 메타만 리턴
 export async function GET() {
   const userId = await getOrCreateUserIdFromCookie();
   if (!userId)
@@ -24,7 +26,7 @@ export async function GET() {
   return NextResponse.json({ latest: latest ?? null });
 }
 
-// POST: multipart/form-data { resume: File } → Blob에 저장 → DB 기록
+// POST: multipart/form-data { resume: File } → Blob에 저장 → DB 기록(✅ raw insert)
 export async function POST(req: NextRequest) {
   const userId = await getOrCreateUserIdFromCookie();
   if (!userId)
@@ -34,31 +36,35 @@ export async function POST(req: NextRequest) {
   const file = fd.get('resume') as File | null;
   if (!file)
     return NextResponse.json({ error: 'resume required' }, { status: 400 });
-  if (file.type !== 'application/pdf')
+  if (file.type !== 'application/pdf') {
     return NextResponse.json({ error: 'pdf only' }, { status: 400 });
+  }
 
   const safeName = sanitizeName(file.name || 'resume.pdf');
   const key = `resumes/${userId}/${Date.now()}-${safeName}`;
 
-  // Blob에 업로드 (private)
+  // Blob 업로드 (public/비공개는 정책에 맞춰 조정하세요)
   const blob = await put(key, file, {
     access: 'public',
     contentType: file.type || 'application/pdf',
     addRandomSuffix: false,
   });
 
-  // DB 기록: storedPath 필드에 "Blob URL" 저장
-  const created = await prisma.resumeFile.create({
-    data: {
-      userId,
-      originalName: file.name || 'resume.pdf',
-      storedPath: blob.url, // ← 로컬 경로 대신 Blob URL
-      mimeType: file.type || 'application/pdf',
-      size: file.size,
-    },
-    select: { id: true, originalName: true, size: true, createdAt: true },
-  });
+  // 🔥 Prisma create 대신 raw SQL로 updatedAt까지 채워 넣기
+  const id = randomUUID();
+  const rows = await prisma.$queryRaw<
+    { id: string; originalName: string; size: number; createdAt: Date }[]
+  >`
+    INSERT INTO "ResumeFile"
+      ("id","userId","originalName","storedPath","mimeType","size","createdAt","updatedAt")
+    VALUES
+      (${id}, ${userId}, ${file.name || 'resume.pdf'}, ${blob.url}, ${
+    file.type || 'application/pdf'
+  }, ${file.size}, NOW(), NOW())
+    RETURNING "id","originalName","size","createdAt"
+  `;
 
+  const created = rows[0];
   return NextResponse.json({ ok: true, latest: created });
 }
 
@@ -72,11 +78,11 @@ export async function DELETE() {
     where: { userId },
     orderBy: { createdAt: 'desc' },
   });
-  if (!latest) return NextResponse.json({ ok: true }); // nothing to delete
+  if (!latest) return NextResponse.json({ ok: true });
 
   try {
     await del(latest.storedPath);
-  } catch {} // Blob 삭제(실패 무시)
+  } catch {}
   await prisma.resumeFile.delete({ where: { id: latest.id } });
 
   return NextResponse.json({ ok: true });

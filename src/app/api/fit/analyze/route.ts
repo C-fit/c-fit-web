@@ -3,39 +3,35 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { getOrCreateUserIdFromCookie } from '@/server/auth';
 import { randomUUID } from 'crypto';
-import { Blob as NodeBlob } from 'buffer';
+
 
 export const runtime = 'nodejs';
 
+// ====== Upstream config ======
 const BASE =
   process.env.LLM_API_BASE ??
   'https://c-fit-langgraph-backend-latest.onrender.com';
 const KEY = process.env.LLM_API_KEY ?? '';
 const KEY_HEADER = process.env.LLM_API_KEY_HEADER ?? 'Authorization';
-const TIMEOUT_MS = Number(process.env.TIMEOUT_MS ?? 1200000);
 const DEBUG = (process.env.DEBUG_FIT ?? '0') === '1';
 
-// 단계별 타임아웃
-const RES_T = Number(
-  process.env.RESUME_TIMEOUT_MS ?? process.env.TIMEOUT_MS ?? 480000
-);
-const JD_T = Number(
-  process.env.JD_TIMEOUT_MS ?? process.env.TIMEOUT_MS ?? 480000
-);
-const FIT_T = Number(
-  process.env.FIT_TIMEOUT_MS ?? process.env.TIMEOUT_MS ?? 480000
-);
+// 공통 타임아웃(기본 20분)
+const TIMEOUT_MS = Number(process.env.TIMEOUT_MS ?? 1200000);
+const FIT_T = Number(process.env.FIT_TIMEOUT_MS ?? TIMEOUT_MS ?? 480000);
 
 const log = (...a: unknown[]) => {
   if (DEBUG) console.log('[FIT]', ...a);
 };
+
 const authHeaders = (): Record<string, string> => {
   if (!KEY) return {};
-  if (KEY_HEADER.toLowerCase() === 'authorization')
+  if (KEY_HEADER.toLowerCase() === 'authorization') {
     return { Authorization: `Bearer ${KEY}` };
+  }
   return { [KEY_HEADER]: KEY };
 };
 
+// fetch + 텍스트 래퍼 (abort + 소요시간 포함)
 async function fetchText(
   url: string,
   init: RequestInit & { timeoutMs?: number } = {}
@@ -51,225 +47,112 @@ async function fetchText(
       ok: res.ok,
       status: res.status,
       statusText: res.statusText,
+      headers: res.headers,
       text: txt,
       ms,
-      headers: res.headers,
     };
   } finally {
     clearTimeout(t);
   }
 }
 
-async function loadPdfBlob(
-  storedPath: string,
-  mimeHint?: string
-): Promise<{ blob: Blob; size: number; mime: string }> {
-  const isUrl =
-    /^https?:\/\//i.test(storedPath) || /^s3:\/\//i.test(storedPath);
-
-  if (isUrl) {
-    // Vercel Blob (private) 대비: 토큰이 있으면 헤더에 붙임
-    const headers = new Headers();
-    if (process.env.BLOB_READ_WRITE_TOKEN) {
-      headers.set(
-        'Authorization',
-        `Bearer ${process.env.BLOB_READ_WRITE_TOKEN}`
-      );
-    }
-
-    const r = await fetch(storedPath, { cache: 'no-store', headers });
-    if (!r.ok)
-      throw new Error(`blob fetch failed: ${r.status} ${r.statusText}`);
-
-    // ✅ fetch.arrayBuffer() 는 순수 ArrayBuffer
-    const ab: ArrayBuffer = await r.arrayBuffer();
-    const mime = mimeHint || r.headers.get('content-type') || 'application/pdf';
-
-    // ✅ ArrayBuffer를 그대로 BlobPart로 사용 (타입 안전)
-    return {
-      blob: new NodeBlob([ab], { type: mime }) as unknown as Blob,
-      size: ab.byteLength,
-      mime,
-    };
-  }
-
-  // ⬇️ 로컬 파일 (개발용)
-  const { readFile } = await import('fs/promises');
-  const buf = await readFile(storedPath); // Node.Buffer (Uint8Array 서브클래스)
-
-  // ✅ Buffer → 정확한 ArrayBuffer 로 변환 + 타입 좁히기
-  const ab: ArrayBuffer = buf.buffer.slice(
-    buf.byteOffset,
-    buf.byteOffset + buf.byteLength
-  ) as ArrayBuffer;
-
-  const mime = mimeHint || 'application/pdf';
-
-  return {
-    blob: new NodeBlob([ab], { type: mime }) as unknown as Blob,
-    size: buf.length,
-    mime,
-  };
-}
-
+// ============ 핸들러 ============
 export async function POST(req: NextRequest) {
   const userId = await getOrCreateUserIdFromCookie();
   if (!userId)
     return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
 
-  const { jobUrl } = (await req.json().catch(() => ({}))) as {
-    jobUrl?: string;
-  };
-  if (!jobUrl)
-    return NextResponse.json({ error: 'jobUrl required' }, { status: 400 });
+  const ct = req.headers.get('content-type')?.toLowerCase() ?? '';
 
-  // 최신 이력서
-  const latest = await prisma.resumeFile.findFirst({
-    where: { userId },
-    orderBy: { createdAt: 'desc' },
-  });
-  if (!latest)
-    return NextResponse.json({ error: 'resume not found' }, { status: 404 });
+  // -----------------------------
+  // [NEW] multipart/form-data → /oneclick/fit 단일 호출 브랜치
+  // -----------------------------
+  if (ct.includes('multipart/form-data')) {
+    let step: 'oneclick' | 'save' = 'oneclick';
+    const threadId = randomUUID();
 
-  // Blob 준비
-  const {
-    blob: pdfBlob,
-    size: pdfSize,
-    mime: pdfMime,
-  } = await loadPdfBlob(
-    latest.storedPath,
-    latest.mimeType || 'application/pdf'
-  );
+    try {
+      const fdIn = await req.formData();
+      const _thread = String(fdIn.get('thread_id') || '') || threadId;
+      const fileAny = fdIn.get('resume_file');
+      const jdUrl = String(fdIn.get('jd_url') || '').trim();
 
-  const threadId = randomUUID();
-  let step: 'resume' | 'jd' | 'fit' | 'save' = 'resume';
-
-  try {
-    // A) /process/resume (multipart/form-data)
-    {
-      const fd = new FormData();
-      fd.set('thread_id', threadId);
-      fd.set('resume_file', pdfBlob, 'resume.pdf');
-
-      log('A start /process/resume', {
-        url: `${BASE}/process/resume`,
-        threadId,
-        file: 'resume.pdf',
-        size: pdfSize,
-        mime: pdfMime,
-      });
-
-      // ✅ 헤더는 Headers로 생성 → HeadersInit 보장
-      const headersA = new Headers(authHeaders());
-      const a = await fetchText(`${BASE}/process/resume`, {
-        method: 'POST',
-        headers: headersA,
-        body: fd,
-        timeoutMs: RES_T,
-      });
-
-      log('A done', {
-        status: a.status,
-        ms: a.ms,
-        ct: a.headers.get('content-type'),
-        bodyPeek: a.text.slice(0, 200),
-      });
-      if (!a.ok)
-        throw new Error(
-          `A failed: HTTP ${a.status} ${a.statusText} :: ${a.text}`
+      if (!(fileAny instanceof File)) {
+        return NextResponse.json(
+          { error: 'resume_file required' },
+          { status: 400 }
         );
-    }
+      }
+      if (!jdUrl) {
+        return NextResponse.json({ error: 'jd_url required' }, { status: 400 });
+      }
 
-    // B) /process/jd (x-www-form-urlencoded)
-    step = 'jd';
-    const bForm = new URLSearchParams({
-      thread_id: String(threadId),
-      jd_url: jobUrl,
-    });
-    log('B start /process/jd', {
-      url: `${BASE}/process/jd`,
-      threadId,
-      jd_url: jobUrl,
-    });
+      // 업스트림으로 그대로 포워딩할 폼 생성
+      const fdOut = new FormData();
+      fdOut.set('thread_id', _thread);
+      fdOut.set('resume_file', fileAny, fileAny.name || 'resume.pdf');
+      fdOut.set('jd_url', jdUrl);
 
-    const headersB = new Headers(authHeaders());
-    headersB.set('Content-Type', 'application/x-www-form-urlencoded');
+      log('ONECLICK start /oneclick/fit', {
+        url: `${BASE}/oneclick/fit`,
+        thread_id: _thread,
+        jd_url: jdUrl,
+        file_name: (fileAny as File).name,
+        file_type: (fileAny as File).type,
+        file_size: (fileAny as File).size,
+      });
 
-    const b = await fetchText(`${BASE}/process/jd`, {
-      method: 'POST',
-      headers: headersB,
-      body: bForm.toString(),
-      timeoutMs: JD_T,
-    });
-    log('B done', {
-      status: b.status,
-      ms: b.ms,
-      bodyPeek: b.text.slice(0, 200),
-    });
-    if (!b.ok)
-      throw new Error(
-        `B failed: HTTP ${b.status} ${b.statusText} :: ${b.text}`
-      );
+      const headers = new Headers(authHeaders());
+      const r = await fetchText(`${BASE}/oneclick/fit`, {
+        method: 'POST',
+        headers,
+        body: fdOut,
+        timeoutMs: FIT_T,
+      });
 
-    // C) /analyze/fit (x-www-form-urlencoded)
-    step = 'fit';
-    const cForm = new URLSearchParams({ thread_id: String(threadId) });
-    log('C start /analyze/fit', { url: `${BASE}/analyze/fit`, threadId });
+      log('ONECLICK done', {
+        status: r.status,
+        ms: r.ms,
+        ct: r.headers.get('content-type'),
+        bodyPeek: r.text.slice(0, 200),
+      });
 
-    const headersC = new Headers(authHeaders());
-    headersC.set('Content-Type', 'application/x-www-form-urlencoded');
+      if (!r.ok) {
+        throw new Error(
+          `oneclick failed: HTTP ${r.status} ${r.statusText} :: ${r.text}`
+        );
+      }
 
-    const c = await fetchText(`${BASE}/analyze/fit`, {
-      method: 'POST',
-      headers: headersC,
-      body: cForm.toString(),
-      timeoutMs: FIT_T,
-    });
-    log('C done', {
-      status: c.status,
-      ms: c.ms,
-      bodyPeek: c.text.slice(0, 200),
-    });
-    if (!c.ok)
-      throw new Error(
-        `C failed: HTTP ${c.status} ${c.statusText} :: ${c.text}`
-      );
+      // D) 결과 저장
+      step = 'save';
+      const created = await prisma.fitResult.create({
+        data: {
+          userId,
+          resumeFileId: null, // 새 플로우는 파일을 DB에 저장하지 않음
+          jobUrl: jdUrl,
+          raw: r.text, // 원본 저장(파싱은 뷰 레벨에서)
+          status: 'completed',
+          score: null,
+          summary: null,
+          strengths: [],
+          gaps: [],
+          recommendations: [],
+        },
+      });
 
-    // D) 결과 저장
-    step = 'save';
-    const created = await prisma.fitResult.create({
-      data: {
-        userId,
-        resumeFileId: latest.id,
-        jobUrl,
-        raw: c.text,
+      return NextResponse.json({
+        ok: true,
+        resultId: created.id,
         status: 'completed',
-        score: null,
-        summary: null,
-        strengths: [],
-        gaps: [],
-        recommendations: [],
-      },
-      select: { id: true },
-    });
-    log('✓ Completed', {
-      threadId,
-      resultId: created.id,
-      rawLen: c.text.length,
-    });
-
-    return NextResponse.json({
-      ok: true,
-      resultId: created.id,
-      status: 'completed',
-      thread_id: threadId,
-    });
-  } catch (e: unknown) {
-    const msg = e instanceof Error ? e.message : String(e);
-    log('✗ Failed', { step, threadId, error: msg });
-    return NextResponse.json(
-      { error: 'upstream failed', step, thread_id: threadId, detail: msg },
-      { status: 502 }
-    );
+        thread_id: _thread,
+      });
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      log('✗ Failed', { step, error: msg });
+      return NextResponse.json(
+        { error: 'upstream failed', step, detail: msg },
+        { status: 502 }
+      );
+    }
   }
 }
