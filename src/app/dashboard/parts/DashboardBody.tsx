@@ -217,23 +217,29 @@ export function DashboardBody({ user }: { user: UserShape }) {
       if (go) dropRef.current?.scrollIntoView({ behavior: 'smooth' });
       return;
     }
+
     try {
+      // JSON 경로: 서버가 최신 이력서를 자동 사용
       const res = await fetch('/api/fit/analyze', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
-        body: JSON.stringify({ jobUrl: item.url }),
+        body: JSON.stringify({ jd_url: item.url }), // ✅ key 통일
       });
-      if (!res.ok) throw new Error('analyze failed');
-      const data = await res.json();
+
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok)
+        throw new Error(data?.detail || data?.error || 'analyze failed');
+
       const resultId = data.resultId || data.id;
       if (resultId) {
+        // ✅ 완료 시 결과 페이지로 자동 이동
         router.push(`/analysis/${resultId}`);
       } else {
         alert('분석 요청이 접수되었습니다. 결과 페이지에서 확인해 주세요.');
       }
-    } catch {
-      alert('분석 요청에 실패했습니다.');
+    } catch (e) {
+      alert(`분석 요청에 실패했습니다. ${(e as Error).message || ''}`);
     }
   }
 
