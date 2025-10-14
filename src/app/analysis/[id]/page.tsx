@@ -6,8 +6,6 @@ import type { Prisma } from '@prisma/client';
 
 type JsonValue = Prisma.JsonValue;
 type ScoreItem = { name: string; score: number; total: number; pct: number };
-type Param = { id: string };
-type Props = { params: Param | Promise<Param> };
 
 function jsonToRecord(
   raw: JsonValue | null | undefined
@@ -41,7 +39,6 @@ function jsonToString(raw: JsonValue | null | undefined): string {
 }
 
 function extractOverallScores(md: string): ScoreItem[] {
-  // "| 이름 | 64.5/100 |" 라인 파싱
   const re = /^\|\s*([^|]+?)\s*\|\s*([\d.]+)\s*\/\s*(\d+)\s*\|/gm;
   const found: ScoreItem[] = [];
   let m: RegExpExecArray | null;
@@ -74,16 +71,13 @@ function Meter({ pct }: { pct: number }) {
   );
 }
 
-// Promise | 값 양쪽 모두 지원
-async function resolveParams(p: Param | Promise<Param>): Promise<Param> {
-  if (typeof (p as any)?.then === 'function') {
-    return (await p) as Param;
-  }
-  return p as Param;
-}
-
-export default async function AnalysisPage(props: Props) {
-  const { id } = await resolveParams(props.params);
+// ✅ Next 15 규칙에 맞춘 시그니처: params는 Promise여야 함
+export default async function AnalysisPage({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}) {
+  const { id } = await params;
 
   const userId = await getOrCreateUserIdFromCookie();
   if (!userId) redirect(`/login?next=/analysis/${id}`);
@@ -94,9 +88,7 @@ export default async function AnalysisPage(props: Props) {
   if (!fit) notFound();
 
   const rawObj = jsonToRecord(fit.raw);
-  const rawText = jsonToString(fit.raw);
-
-  // 응답 예시: { "applicant_recruitment": "<markdown>" }
+ 
   const md =
     rawObj && typeof rawObj['applicant_recruitment'] === 'string'
       ? (rawObj['applicant_recruitment'] as string)
@@ -210,7 +202,7 @@ export default async function AnalysisPage(props: Props) {
         <section className='rounded-lg border p-4'>
           <div className='text-sm text-muted-foreground'>원문(raw)</div>
           <pre className='mt-2 whitespace-pre-wrap break-words text-sm'>
-            {rawText}
+            {jsonToString(fit.raw)}
           </pre>
           <p className='mt-2 text-xs text-muted-foreground'>
             응답에서 <code>applicant_recruitment</code> 마크다운을 찾지 못해
