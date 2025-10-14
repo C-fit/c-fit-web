@@ -12,7 +12,6 @@ function jsonToRecord(
 ): Record<string, unknown> | null {
   if (raw == null) return null;
 
-  // 문자열이면 JSON.parse 시도
   if (typeof raw === 'string') {
     try {
       const obj = JSON.parse(raw);
@@ -23,12 +22,9 @@ function jsonToRecord(
       return null;
     }
   }
-
-  // 객체면 그대로 반환 (배열은 우리가 기대하는 구조가 아님)
   if (typeof raw === 'object' && !Array.isArray(raw)) {
     return raw as Record<string, unknown>;
   }
-
   return null;
 }
 
@@ -43,7 +39,6 @@ function jsonToString(raw: JsonValue | null | undefined): string {
 }
 
 function extractOverallScores(md: string): ScoreItem[] {
-  // "이름 | 64.5/100" 형태 라인 추출
   const re = /^\|\s*([^|]+?)\s*\|\s*([\d.]+)\s*\/\s*(\d+)\s*\|/gm;
   const found: ScoreItem[] = [];
   let m: RegExpExecArray | null;
@@ -76,24 +71,24 @@ function Meter({ pct }: { pct: number }) {
   );
 }
 
+// ✅ Next 15 규칙에 맞춘 시그니처: params는 Promise여야 함
 export default async function AnalysisPage({
   params,
 }: {
-  params: { id: string };
+  params: Promise<{ id: string }>;
 }) {
+  const { id } = await params;
+
   const userId = await getOrCreateUserIdFromCookie();
-  if (!userId) redirect(`/login?next=/analysis/${params.id}`);
+  if (!userId) redirect(`/login?next=/analysis/${id}`);
 
   const fit = await prisma.fitResult.findFirst({
-    where: { id: params.id, userId },
+    where: { id, userId },
   });
   if (!fit) notFound();
 
-  // raw를 안전하게 객체/문자열로 변환
   const rawObj = jsonToRecord(fit.raw);
-  const rawText = jsonToString(fit.raw);
-
-  // 응답 예시: { "applicant_recruitment": "<markdown>" }
+ 
   const md =
     rawObj && typeof rawObj['applicant_recruitment'] === 'string'
       ? (rawObj['applicant_recruitment'] as string)
@@ -207,7 +202,7 @@ export default async function AnalysisPage({
         <section className='rounded-lg border p-4'>
           <div className='text-sm text-muted-foreground'>원문(raw)</div>
           <pre className='mt-2 whitespace-pre-wrap break-words text-sm'>
-            {rawText}
+            {jsonToString(fit.raw)}
           </pre>
           <p className='mt-2 text-xs text-muted-foreground'>
             응답에서 <code>applicant_recruitment</code> 마크다운을 찾지 못해
