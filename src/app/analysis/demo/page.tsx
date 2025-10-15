@@ -315,23 +315,32 @@ function BentoCard(props: {
   className?: string;
 }) {
   const { icon, title, subtitle, href, children, className = '' } = props;
-  const Wrapper: keyof JSX.IntrinsicElements = href ? 'a' : 'div';
-  const linkProps = href ? { href, target: '_blank', rel: 'noreferrer' } : {};
 
-  return (
-    <Wrapper
-      {...(linkProps as any)}
-      className={[
-        'group relative rounded-2xl border border-black/5 dark:border-white/10',
-        'bg-white/80 dark:bg-white/5 backdrop-blur-sm shadow-sm hover:shadow-md',
-        'transition-all hover:-translate-y-[1px] p-4',
-        className,
-      ].join(' ')}
-      style={{ color: 'var(--foreground)' }}
-    >
+  // 공통 클래스
+  const cls = [
+    'group relative rounded-2xl border border-black/5 dark:border-white/10',
+    'bg-white/80 dark:bg-white/5 backdrop-blur-sm shadow-sm hover:shadow-md',
+    'transition-all hover:-translate-y-[1px] p-4',
+    className,
+  ].join(' ');
+
+  const Header = (
+    <>
       {(icon || title || subtitle) && (
         <div className='mb-3 flex items-start gap-2'>
-          {icon && <IconBadge emoji={icon} />}
+          {icon && (
+            <div className='inline-flex items-center justify-center bg-brand-gradient p-[2px] rounded-full'>
+              <div
+                className='h-8 w-8 rounded-full flex items-center justify-center text-sm'
+                style={{
+                  background: 'var(--background)',
+                  color: 'var(--primary)',
+                }}
+              >
+                {icon}
+              </div>
+            </div>
+          )}
           <div>
             {title && <h3 className='text-base font-semibold'>{title}</h3>}
             {subtitle && (
@@ -340,9 +349,32 @@ function BentoCard(props: {
           </div>
         </div>
       )}
+    </>
+  );
+
+  // ✅ 분기 렌더링: JSX 네임스페이스 사용 안 함
+  if (href) {
+    return (
+      <a
+        href={href}
+        target='_blank'
+        rel='noreferrer'
+        className={cls}
+        style={{ color: 'var(--foreground)' }}
+      >
+        {Header}
+        {children}
+        <div className='pointer-events-none absolute inset-0 rounded-2xl ring-1 ring-transparent group-hover:ring-black/5 dark:group-hover:ring-white/10' />
+      </a>
+    );
+  }
+
+  return (
+    <div className={cls} style={{ color: 'var(--foreground)' }}>
+      {Header}
       {children}
       <div className='pointer-events-none absolute inset-0 rounded-2xl ring-1 ring-transparent group-hover:ring-black/5 dark:group-hover:ring-white/10' />
-    </Wrapper>
+    </div>
   );
 }
 
