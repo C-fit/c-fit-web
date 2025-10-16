@@ -16,7 +16,7 @@ interface JobFiltersProps {
 export function JobFilters({ filters, onFiltersChange }: JobFiltersProps) {
   const [isOpen, setIsOpen] = useState(false)
 
-  const techStackOptions = []
+
 
   const jobTypeOptions = [
     { value: "full-time", label: "정규직" },

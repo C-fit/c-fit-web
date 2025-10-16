@@ -39,9 +39,7 @@ model JobPosting {
   savedBy         SavedJob[]
 }
 
-/// *
-///  * 사용자와 채용 공고의 '관심' 관계를 저장하는 중간 테이블입니다.
-///  * (Many-to-Many 관계)
+
 model SavedJob {
   id           String     @id @default(cuid())
   userId       String
