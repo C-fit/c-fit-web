@@ -9,29 +9,72 @@ export type FitView = {
   rawText?: string;
 };
 
+// 내부 유틸 타입/가드
+type UnknownRecord = Record<string, unknown>;
+
+const isRecord = (v: unknown): v is UnknownRecord =>
+  typeof v === 'object' && v !== null;
+
+const isString = (v: unknown): v is string => typeof v === 'string';
+
+const isNumber = (v: unknown): v is number =>
+  typeof v === 'number' && Number.isFinite(v);
+
+const isStringArray = (v: unknown): v is string[] =>
+  Array.isArray(v) && v.every(isString);
+
+const isDimArray = (v: unknown): v is { name: string; score: number }[] =>
+  Array.isArray(v) &&
+  v.every(
+    (d) =>
+      isRecord(d) && isString(d.name) && isNumber(d.score)
+  );
+
 // 가장 긴 문자열을 골라주는 유틸
-function longestString(obj: any): string | undefined {
-  if (!obj || typeof obj !== 'object') return undefined;
-  const strings = Object.values(obj).filter(
-    (v) => typeof v === 'string'
-  ) as string[];
+function longestString(obj: unknown): string | undefined {
+  if (!isRecord(obj)) return undefined;
+  const strings = Object.values(obj).filter(isString);
   return strings.sort((a, b) => (b?.length ?? 0) - (a?.length ?? 0))[0];
 }
 
+// raw 블록에 허용할 느슨한 구조
+type FitRawLoose = {
+  score?: unknown;
+  summary?: unknown;
+  dimensions?: unknown;
+  strengths?: unknown;
+  gaps?: unknown;
+  recommendations?: unknown;
+  text?: unknown;
+  rawText?: unknown;
+  content?: unknown;
+  report?: unknown;
+};
+
 // 어떤 형태로 오든 원문 텍스트를 꺼냄
-function getRawTextFromItem(item: any): string {
-  if (!item) return '';
-  if (typeof item.raw === 'string') return item.raw;
-  if (typeof item.rawText === 'string') return item.rawText;
-  if (item.raw && typeof item.raw === 'object') {
-    for (const key of ['text', 'rawText', 'content', 'report']) {
-      const v = (item.raw as any)[key];
-      if (typeof v === 'string' && v.trim().length > 0) return v;
+function getRawTextFromItem(item: unknown): string {
+  if (!item || !isRecord(item)) return '';
+
+  // item.raw가 문자열인 경우
+  if (isString(item.raw)) return item.raw;
+
+  // item.rawText가 문자열인 경우
+  if (isString(item.rawText)) return item.rawText;
+
+  // item.raw가 객체인 경우: text/rawText/content/report 키 우선
+  if (isRecord(item.raw)) {
+    const raw = item.raw as FitRawLoose;
+    const candidates = [raw.text, raw.rawText, raw.content, raw.report];
+    for (const v of candidates) {
+      if (isString(v) && v.trim().length > 0) return v;
     }
     const longest = longestString(item.raw);
     if (longest) return longest;
   }
-  if (typeof item.summary === 'string') return item.summary;
+
+  // summary가 문자열이면 fallback
+  if (isString(item.summary)) return item.summary;
+
   return '';
 }
 
@@ -75,9 +118,10 @@ function extractBullets(text: string, titleRe: RegExp): string[] {
     .filter(Boolean);
 }
 
-export function parseResumeReview(text: string) {
+export function parseResumeReview(text: string): FitView {
   const view: FitView = { rawText: text };
   view.score = extractTotalScore(text);
+
   // 역량 레이더 후보 키워드
   const dims: { name: string; score: number }[] = [];
   for (const m of text.matchAll(
@@ -98,7 +142,7 @@ export function parseResumeReview(text: string) {
   return view;
 }
 
-export function parseComparisonReport(text: string) {
+export function parseComparisonReport(text: string): FitView {
   const view: FitView = { rawText: text };
   view.score = extractTotalScore(text);
 
@@ -138,36 +182,75 @@ export function parseComparisonReport(text: string) {
   return view;
 }
 
-export function normalizeFit(item: any): FitView {
+// normalize 대상 아이템의 느슨한 형태
+type FitItemLoose = {
+  raw?: unknown;
+  rawText?: unknown;
+  summary?: unknown;
+  score?: unknown;
+  strengths?: unknown;
+  gaps?: unknown;
+  recommendations?: unknown;
+};
+
+export function normalizeFit(item: unknown): FitView {
+  const it = isRecord(item) ? (item as UnknownRecord & FitItemLoose) : undefined;
+
   // 1) 구조화된 raw 우선
-  if (
-    item?.raw &&
-    typeof item.raw === 'object' &&
-    (item.raw.score || item.raw.dimensions)
-  ) {
-    return {
-      score: item.raw.score ?? item.score,
-      summary:
-        item.raw.summary ??
-        item.summary ??
-        pickSummary(getRawTextFromItem(item)),
-      dimensions: item.raw.dimensions,
-      strengths: item.raw.strengths ?? item.strengths ?? [],
-      gaps: item.raw.gaps ?? item.gaps ?? [],
-      recommendations: item.raw.recommendations ?? item.recommendations ?? [],
-      rawText: getRawTextFromItem(item),
-    };
+  if (it && isRecord(it.raw)) {
+    const raw = it.raw as FitRawLoose;
+
+    const rawScore = isNumber(raw.score) ? raw.score : undefined;
+    const rawSummary = isString(raw.summary) ? raw.summary : undefined;
+    const rawDims = isDimArray(raw.dimensions) ? raw.dimensions : undefined;
+    const rawStrengths = isStringArray(raw.strengths) ? raw.strengths : undefined;
+    const rawGaps = isStringArray(raw.gaps) ? raw.gaps : undefined;
+    const rawRecs = isStringArray(raw.recommendations) ? raw.recommendations : undefined;
+
+    if (
+      rawScore !== undefined ||
+      rawDims !== undefined
+    ) {
+      return {
+        score: rawScore ?? (isNumber(it.score) ? it.score : undefined),
+        summary:
+          rawSummary ??
+          (isString(it.summary) ? it.summary : undefined) ??
+          pickSummary(getRawTextFromItem(it)),
+        dimensions: rawDims,
+        strengths:
+          rawStrengths ??
+          (isStringArray(it.strengths) ? it.strengths : []) ??
+          [],
+        gaps:
+          rawGaps ?? (isStringArray(it.gaps) ? it.gaps : []) ?? [],
+        recommendations:
+          rawRecs ??
+          (isStringArray(it.recommendations) ? it.recommendations : []) ??
+          [],
+        rawText: getRawTextFromItem(it),
+      };
+    }
   }
 
   // 2) 원문 텍스트 기반 파싱
   const text = getRawTextFromItem(item);
-  if (!text) return { score: item?.score, summary: item?.summary, rawText: '' };
+  if (!text) {
+    return {
+      score: isRecord(item) && isNumber((item as UnknownRecord).score)
+        ? ((item as UnknownRecord).score as number)
+        : undefined,
+      summary:
+        isRecord(item) && isString((item as UnknownRecord).summary)
+          ? ((item as UnknownRecord).summary as string)
+          : undefined,
+      rawText: '',
+    };
+  }
 
   // 유형 감지: 키워드로 유연하게 결정
   const isResumeReview =
-    /첨삭|가독성|문서|역량\s*점수|기술\s*역량|문제\s*해결|오너십|협업/.test(
-      text
-    );
+    /첨삭|가독성|문서|역량\s*점수|기술\s*역량|문제\s*해결|오너십|협업/.test(text);
 
   return isResumeReview ? parseResumeReview(text) : parseComparisonReport(text);
 }

@@ -35,7 +35,6 @@ export function Navigation() {
 
   return (
     <header className='sticky top-0 z-50 bg-background/80 backdrop-blur'>
-      {/* 상단 그라데이션 보더 */}
       <div className='h-[3px] bg-brand-gradient' />
 
       <nav className='sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60'>
@@ -80,6 +79,12 @@ export function Navigation() {
                     className='text-sm font-medium hover:text-primary transition-colors'
                   >
                     대시보드
+                  </Link>
+                  <Link
+                    href='/jobs'
+                    className='text-sm font-medium hover:text-primary transition-colors'
+                  >
+                    채용공고
                   </Link>
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>

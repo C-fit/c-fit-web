@@ -1,6 +1,5 @@
-// src/app/analysis/[id]/page.tsx
 import { prisma } from '@/lib/db';
-import { getOrCreateUserIdFromCookie } from '@/server/auth';
+import {getUserIdFromJwtCookie } from '@/server/auth';
 import { notFound, redirect } from 'next/navigation';
 import type { Prisma as P } from '@prisma/client';
 import ReactMarkdown from 'react-markdown';
@@ -44,7 +43,7 @@ type FitV11 = {
   confidence?: { level: number; notes?: string };
 };
 
-// ===== helpers =====
+
 function toObject(raw: P.JsonValue | null | undefined): unknown {
   if (raw == null) return null;
   if (typeof raw === 'string') {
@@ -71,9 +70,14 @@ function normalize(raw: unknown): FitV11 | null {
   }
 
 
-  // 오래된 마크다운-only
-  if (isString((raw as any)?.applicant_recruitment)) {
-    const md = String((raw as any).applicant_recruitment);
+
+  if (
+    'applicant_recruitment' in raw &&
+    isString((raw as Record<string, unknown>).applicant_recruitment)
+  ) {
+    const md = String(
+      (raw as Record<string, unknown>).applicant_recruitment
+    );
     return {
       version: 'fit.v1.1',
       summary_short: md.slice(0, 450),
@@ -196,7 +200,6 @@ function Radar5({ axes, size = 340 }: { axes: Axis[]; size?: number }) {
   );
 }
 
-// ===== Next 15: params는 Promise여야 함 =====
 export default async function Page({
   params,
 }: {
@@ -204,7 +207,7 @@ export default async function Page({
 }) {
   const { id } = await params;
 
-  const userId = await getOrCreateUserIdFromCookie();
+  const userId = await getUserIdFromJwtCookie();
   if (!userId) redirect(`/login?next=/analysis/${id}`);
 
   const fit = await prisma.fitResult.findFirst({ where: { id, userId } });
@@ -294,8 +297,8 @@ export default async function Page({
             </p>
           </div>
         </div>
-
-        {/* 레이더(크게) + 라벨을 그래프 안에 */}
+        
+        {/* 5축 레이더 */}
         <div className='col-span-12 sm:col-span-6 lg:col-span-4 rounded-2xl border border-black/5 dark:border-white/10 bg-white/80 dark:bg-white/5 backdrop-blur-sm p-4'>
           <div className='mb-3 flex items-start gap-2'>
             <div className='inline-flex items-center justify-center bg-brand-gradient p-[2px] rounded-full'>

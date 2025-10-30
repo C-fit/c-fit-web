@@ -1,39 +1,48 @@
-import { NextRequest, NextResponse } from 'next/server';
-import bcrypt from 'bcryptjs';
+// src/app/api/auth/login/route.ts
+import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
-import { setSessionCookie, type SessionUser } from '@/lib/auth';
+import { signSessionJwt, attachSessionCookie } from '@/server/auth';
 
-export async function POST(req: NextRequest) {
-  const body = await req.json().catch(() => ({} as Record<string, unknown>));
-  const email =
-    typeof body?.email === 'string' ? body.email.trim().toLowerCase() : '';
-  const pw = typeof body?.password === 'string' ? body.password : '';
+export const runtime = 'nodejs';
 
-  if (!email || !pw) {
-    return NextResponse.json({ error: 'MISSING_CREDENTIALS' }, { status: 400 });
+type LoginBody = {
+  email?: string;
+  password?: string;
+  name?: string | null;
+};
+
+export async function POST(req: Request) {
+  try {
+    const body = (await req.json().catch(() => ({}))) as LoginBody;
+
+    const email = typeof body.email === 'string' ? body.email.trim() : '';
+    const name =
+      typeof body.name === 'string'
+        ? body.name.trim()
+        : body.name === null
+        ? null
+        : undefined;
+
+    if (!email || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
+      return NextResponse.json({ error: 'email required' }, { status: 400 });
+    }
+
+
+    const user = await prisma.user.upsert({
+      where: { email },
+      update: { ...(typeof name !== 'undefined' ? { name } : {}) },
+      create: {
+        email,
+        name: typeof name !== 'undefined' ? name : null,
+        passwordHash: 'external-auth',
+      },
+      select: { id: true, email: true, name: true },
+    });
+
+    const token = await signSessionJwt(user);
+    const res = NextResponse.json({ ok: true, user });
+    return attachSessionCookie(res, token); 
+  } catch {
+    return NextResponse.json({ error: 'internal_error' }, { status: 500 });
   }
-
-  // 1) 사용자 조회
-  const user = await prisma.user.findUnique({ where: { email } });
-
-  // 2) 비밀번호 해시 확인 (null 가능성 처리)
-  const hash: string | null = user?.passwordHash ?? null;
-  if (!user || !hash) {
-    return NextResponse.json({ error: 'INVALID_CREDENTIALS' }, { status: 401 });
-  }
-
-  const ok = await bcrypt.compare(pw, hash);
-  if (!ok) {
-    return NextResponse.json({ error: 'INVALID_CREDENTIALS' }, { status: 401 });
-  }
-
-  // 3) 세션 쿠키 설정
-  const sessUser: SessionUser = {
-    id: user.id,
-    email: user.email,
-    name: user.name,
-  };
-  await setSessionCookie(sessUser);
-
-  return NextResponse.json({ ok: true, user: sessUser });
 }

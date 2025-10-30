@@ -1,7 +1,7 @@
 // src/app/api/fit/analyze/route.ts
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
-import { getOrCreateUserIdFromCookie } from '@/server/auth';
+import { getUserIdFromJwtCookie} from '@/server/auth';
 import { randomUUID } from 'crypto';
 import type { Prisma as P } from '@prisma/client';
 
@@ -55,55 +55,73 @@ function tryParseJson(text: string): unknown | null {
   }
 }
 
-function extractForDb(obj: unknown): {
+type FitParsed = {
   score: number | null;
   summary: string | null;
   strengths: string[];
   gaps: string[];
-  recommendations: string[]; // 문자열 리스트(P1: ... 형태)
-} {
-  const asRec = (v: unknown): v is Record<string, unknown> =>
+  recommendations: string[]; // "P?: action (impact: ?)" 형태
+};
+
+function extractForDb(obj: unknown): FitParsed {
+  const isObj = (v: unknown): v is Record<string, unknown> =>
     typeof v === 'object' && v !== null;
 
-  if (asRec(obj) && obj.version === 'fit.v1.1') {
-    const score =
-      asRec(obj.overall) && typeof (obj.overall as any).score === 'number'
-        ? (obj.overall as any).score
-        : null;
+  const asStrings = (v: unknown): string[] =>
+    Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : [];
+
+  const getScore = (overall: unknown): number | null => {
+    if (!isObj(overall)) return null;
+    const s = (overall as { score?: unknown }).score;
+    return typeof s === 'number' ? s : null;
+  };
+
+  const toRec = (list: unknown): string[] => {
+    if (!Array.isArray(list)) return [];
+    return list.map((r) => {
+      if (!isObj(r)) return 'P3: ';
+      const p =
+        typeof (r as { priority?: unknown }).priority === 'string'
+          ? (r as { priority?: string }).priority
+          : 'P3';
+      const a =
+        typeof (r as { action?: unknown }).action === 'string'
+          ? (r as { action?: string }).action
+          : '';
+      const i =
+        typeof (r as { impact?: unknown }).impact === 'string'
+          ? ` (impact: ${(r as { impact: string }).impact})`
+          : '';
+      return `${p}: ${a}${i}`;
+    });
+  };
+
+  // v1.1
+  if (isObj(obj) && obj['version'] === 'fit.v1.1') {
+    const score = getScore(isObj(obj['overall']) ? obj['overall'] : undefined);
     const summary =
-      typeof obj.summary_short === 'string' ? obj.summary_short : null;
-    const strengths = Array.isArray(obj.strengths)
-      ? obj.strengths.filter((x: unknown) => typeof x === 'string')
-      : [];
-    const gaps = Array.isArray(obj.gaps)
-      ? obj.gaps.filter((x: unknown) => typeof x === 'string')
-      : [];
-    const recs = Array.isArray(obj.recommendations)
-      ? (obj.recommendations as any[]).map((r) => {
-          const p = typeof r?.priority === 'string' ? r.priority : 'P3';
-          const a = typeof r?.action === 'string' ? r.action : '';
-          const i =
-            typeof r?.impact === 'string' ? ` (impact: ${r.impact})` : '';
-          return `${p}: ${a}${i}`;
-        })
-      : [];
+      typeof obj['summary_short'] === 'string'
+        ? (obj['summary_short'] as string)
+        : null;
+    const strengths = asStrings(obj['strengths']);
+    const gaps = asStrings(obj['gaps']);
+    const recs = toRec(obj['recommendations']);
     return { score, summary, strengths, gaps, recommendations: recs };
   }
 
-  // v1 (구버전) 또는 텍스트 fallback
-  if (asRec(obj) && obj.version === 'fit.v1') {
-    const score =
-      asRec(obj.overall) && typeof (obj.overall as any).score === 'number'
-        ? (obj.overall as any).score
-        : null;
+  // v1 (구버전)
+  if (isObj(obj) && obj['version'] === 'fit.v1') {
+    const score = getScore(isObj(obj['overall']) ? obj['overall'] : undefined);
     const summary =
-      typeof obj.summary_short === 'string' ? obj.summary_short : null;
+      typeof obj['summary_short'] === 'string'
+        ? (obj['summary_short'] as string)
+        : null;
     return { score, summary, strengths: [], gaps: [], recommendations: [] };
   }
 
   // 마크다운-only 또는 알 수 없음
-  if (asRec(obj) && typeof (obj as any).applicant_recruitment === 'string') {
-    const md = String((obj as any).applicant_recruitment);
+  if (isObj(obj) && typeof obj['applicant_recruitment'] === 'string') {
+    const md = String(obj['applicant_recruitment']);
     return {
       score: null,
       summary: md.slice(0, 450),
@@ -136,7 +154,7 @@ async function loadBlobFromUrl(url: string, mimeHint = 'application/pdf') {
 }
 
 export async function POST(req: NextRequest) {
-  const userId = await getOrCreateUserIdFromCookie();
+  const userId = await getUserIdFromJwtCookie();
   if (!userId)
     return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
 

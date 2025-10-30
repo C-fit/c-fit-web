@@ -2,6 +2,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { getSession } from '@/lib/auth';
+import type { Prisma as P } from '@prisma/client';
 
 function toInt(v: string | null, d: number | null = null) {
   if (v === null) return d;
@@ -36,13 +37,13 @@ export async function GET(req: Request) {
   const maxY = maxYear ?? 20;
   const yearList = rangeArray(minY, maxY);
 
-  const where: any = {};
+  const where: P.JobPostingWhereInput = {};
 
   if (q) {
     where.OR = [
-      { title: { contains: q, mode: 'insensitive' } },
-      { companyName: { contains: q, mode: 'insensitive' } },
-      { jobName: { contains: q, mode: 'insensitive' } },
+      { title: { contains: q, mode: 'insensitive' as const } },
+      { companyName: { contains: q, mode: 'insensitive' as const } },
+      { jobName: { contains: q, mode: 'insensitive' as const } },
     ];
   }
   if (job) {
@@ -69,7 +70,7 @@ export async function GET(req: Request) {
       ? { companyName: 'asc' as const }
       : sort === 'title'
       ? { title: 'asc' as const }
-      : { updatedAt: 'desc' as const }; // default recent
+      : { updatedAt: 'desc' as const };
 
   const [items, total] = await Promise.all([
     prisma.jobPosting.findMany({

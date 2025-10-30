@@ -1,4 +1,3 @@
-// src/lib/auth.ts
 import 'server-only';
 import { SignJWT, jwtVerify, type JWTPayload } from 'jose';
 import { cookies } from 'next/headers';
@@ -6,7 +5,6 @@ import type { NextRequest } from 'next/server';
 
 const key = new TextEncoder().encode(process.env.JWT_SECRET || 'dev-secret');
 
-// ===== 타입 =====
 export type SessionUser = {
   id: string;
   email: string | null;
@@ -19,7 +17,7 @@ export interface SessionPayload extends JWTPayload {
 
 // ===== JWT utils =====
 export async function encrypt(payload: SessionPayload): Promise<string> {
-  return await new SignJWT(payload) // payload는 JWTPayload를 확장한 타입
+  return await new SignJWT(payload) 
     .setProtectedHeader({ alg: 'HS256' })
     .setIssuedAt()
     .setExpirationTime('24h')
@@ -35,13 +33,13 @@ export async function decrypt(token: string): Promise<SessionPayload | null> {
   }
 }
 
-// ===== 세션 쿠키 유틸 =====
+
 export async function setSessionCookie(user: SessionUser) {
   const expAt = Date.now() + 24 * 60 * 60 * 1000;
   const expires = new Date(expAt);
   const token = await encrypt({ user, exp: Math.floor(expAt / 1000) });
 
-  const jar = await cookies(); // Next 15: await 필요
+  const jar = await cookies(); 
   jar.set('session', token, {
     httpOnly: true,
     sameSite: 'lax',
