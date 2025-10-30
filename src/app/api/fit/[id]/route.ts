@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 
-// Next.js 15: params는 Promise여서 await 해야 함
 export async function GET(
   _req: NextRequest,
   { params }: { params: Promise<{ id: string }> }

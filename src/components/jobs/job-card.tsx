@@ -1,4 +1,3 @@
-// components/jobs/job-card.tsx
 'use client';
 
 import {

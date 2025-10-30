@@ -1,4 +1,3 @@
-// src/lib/job-tech-options.ts
 export const JOB_OPTIONS: string[] = [
   "소프트웨어 엔지니어","웹 개발자","서버 개발자","프론트엔드 개발자","자바 개발자",
   "C,C++ 개발자","파이썬 개발자","머신러닝 엔지니어","DevOps / 시스템 관리자","시스템,네트워크 관리자",
@@ -10,7 +9,7 @@ export const JOB_OPTIONS: string[] = [
   "루비온레일즈 개발자","CIO,Chief Information Officer",
 ];
 
-// 기본 추천 스택(자유롭게 추가/정리 가능)
+
 export const TECH_OPTIONS: string[] = [
   "Python","Java","JavaScript","TypeScript","C++","C","C#","Go","Kotlin","Swift",
   "React","Next.js","Vue","Node.js","NestJS","Spring","Spring Boot","Django","Flask",

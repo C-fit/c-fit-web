@@ -1,4 +1,3 @@
-// src/components/filters/multi-select-dialog.tsx
 "use client";
 
 import { useMemo, useState } from "react";
@@ -9,11 +8,11 @@ import {
 } from "@/components/ui/dialog";
 
 type Props = {
-  triggerLabel: string;     // 버튼 텍스트 (예: "기술스택")
-  options: string[];        // 선택지
-  value: string[];          // 현재 선택값
+  triggerLabel: string;     
+  options: string[];        
+  value: string[];          
   onChange: (next: string[]) => void;
-  placeholder?: string;     // 검색 placeholder
+  placeholder?: string;    
 };
 
 export function MultiSelectDialog({

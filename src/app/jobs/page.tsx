@@ -1,9 +1,6 @@
 'use client';
-import { useEffect, useMemo, useState } from 'react';
-import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useEffect, useMemo, useState, useCallback } from 'react';
 import { Navigation } from '@/components/navigation';
-
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
@@ -16,7 +13,6 @@ import {
   SelectItem,
 } from '@/components/ui/select';
 import { JobCard } from '@/components/jobs/job-card';
-// 상단 import들 근처에 추가
 import {
   Dialog,
   DialogTrigger,
@@ -25,7 +21,7 @@ import {
   DialogTitle,
   DialogFooter,
 } from '@/components/ui/dialog';
-import { X } from 'lucide-react'; // 선택 뱃지의 X 아이콘(선택 해제용)
+import { X } from 'lucide-react'; 
 
 type ApiItem = {
   id: string;
@@ -47,9 +43,6 @@ type ApiResp = {
 };
 
 export default function JobsPage() {
-  const router = useRouter();
-
-  // 필터 상태
   const [q, setQ] = useState('');
   const [job, setJob] = useState<string[]>([]);
   const [jobOpen, setJobOpen] = useState(false);
@@ -98,15 +91,13 @@ export default function JobsPage() {
     'CIO,Chief Information Officer',
   ];
 
-  // 페이지네이션
+
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
 
-  // 데이터
   const [data, setData] = useState<ApiResp | null>(null);
   const [loading, setLoading] = useState(false);
 
-  // 쿼리스트링 구성
   const params = useMemo(() => {
     const p = new URLSearchParams();
     if (q) p.set('q', q);
@@ -124,21 +115,21 @@ export default function JobsPage() {
     return p.toString();
   }, [q, job, company, exp, years, sort, page, pageSize]);
 
-  async function fetchList() {
+  const fetchList = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch(`/api/jobs?${params}`, { cache: 'no-store' });
+      const res = await fetch(`/api/jobs?${params}` , { cache: 'no-store' });
       const json = (await res.json()) as ApiResp;
       setData(json);
     } finally {
       setLoading(false);
     }
-  }
+  }, [params]);
 
   useEffect(() => {
-    fetchList();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [params]);
+    void fetchList();
+  }, [fetchList]);
+
 
   // 필터 초기화
   function clearFilters() {
@@ -275,7 +266,7 @@ export default function JobsPage() {
                   <Button
                     onClick={() => {
                       setPage(1);
-                      setJobOpen(false); // 적용 후 닫기
+                      setJobOpen(false);
                     }}
                   >
                     적용
@@ -284,7 +275,6 @@ export default function JobsPage() {
               </DialogContent>
             </Dialog>
 
-            {/* 요약 라벨(선택사항) */}
             {job.length > 0 && (
               <div className='text-sm text-muted-foreground'>
                 선택됨: {job.join(', ')}
@@ -364,7 +354,7 @@ export default function JobsPage() {
                 position='popper'
                 className='z-[70] bg-white dark:bg-neutral-900 border shadow-md'
               >
-                {/* ⛔️ 빈 문자열 금지: 'all'을 사용 */}
+                {/* 빈 문자열 금지: 'all'을 사용 */}
                 <SelectItem value='all'>전체</SelectItem>
                 <SelectItem value='신입'>신입</SelectItem>
                 <SelectItem value='경력무관'>경력무관</SelectItem>
@@ -402,14 +392,14 @@ export default function JobsPage() {
           </div>
         </div>
 
-        {/* Results */}
+        {/* 채용공고 목록 */}
         <div className='grid sm:grid-cols-2 lg:grid-cols-3 gap-4'>
           {data?.items.map((it) => (
             <JobCard key={it.id} item={it} />
           ))}
         </div>
 
-        {/* Pagination */}
+        
         <div className='flex items-center justify-center gap-3 pt-2'>
           <Button
             variant='outline'

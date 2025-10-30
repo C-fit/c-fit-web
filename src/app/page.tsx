@@ -1,5 +1,4 @@
 'use client';
-
 import Link from 'next/link';
 import {
   Sparkles,
@@ -15,7 +14,6 @@ import { Badge } from '@/components/ui/badge';
 import { useEffect, useRef, useState } from 'react';
 import Image from 'next/image';
 
-/** IntersectionObserver 기반 스크롤 리빌 */
 function useReveal<T extends HTMLElement>(once = true, threshold = 0.18) {
   const ref = useRef<T | null>(null);
   const [visible, setVisible] = useState(false);
@@ -106,13 +104,14 @@ function StepCard({
   );
 }
 
+/** B안: 상태로 토글해 에러 시 이미지를 숨김 (any 제거) */
 function SmartImage({
   src,
   alt,
-  heightClass, 
-  mode = 'contain', 
+  heightClass,
+  mode = 'contain',
   className = '',
-  blur = false, 
+  blur = false,
   focal = 'center',
 }: {
   src: string;
@@ -121,25 +120,29 @@ function SmartImage({
   mode?: 'contain' | 'cover';
   className?: string;
   blur?: boolean;
-  focal?: string;
+  focal?: string; // e.g., 'center' 또는 '50% 20%'
 }) {
+  const [hidden, setHidden] = useState(false);
+
   return (
     <div
       className={`relative w-full ${heightClass} overflow-hidden rounded-lg bg-muted/60`}
     >
-      <Image
-        src={src}
-        alt={alt}
-        fill
-        sizes='100vw'
-        className={`${mode === 'cover' ? 'object-cover' : 'object-contain'} ${
-          blur ? 'blur-[1.5px] saturate-90' : ''
-        } ${className}`}
-        style={{ objectPosition: focal }}
-        onError={(e) => {
-          (e.currentTarget as any).style.display = 'none';
-        }}
-      />
+      {!hidden && (
+        <Image
+          src={src}
+          alt={alt}
+          fill
+          sizes='100vw'
+          className={`${mode === 'cover' ? 'object-cover' : 'object-contain'} ${
+            blur ? 'blur-[1.5px] saturate-90' : ''
+          } ${className}`}
+          style={{ objectPosition: focal }}
+          onError={() => {
+            setHidden(true);
+          }}
+        />
+      )}
     </div>
   );
 }
@@ -173,23 +176,6 @@ export default function HomePage() {
                   AI가 적합도를 분석하고 합격률을 높이는 방법을 제안합니다.
                 </span>
               </p>
-
-              <div className='flex flex-col sm:flex-row gap-3 justify-center'>
-                <Button
-                  asChild
-                  variant='gradient'
-                  size='lg'
-                  className='text-lg px-8'
-                ></Button>
-                <Button
-                  asChild
-                  size='lg'
-                  className='text-lg px-8'
-                  variant='outline'
-                >
-                  <Link href='/jobs'>채용공고 둘러보기</Link>
-                </Button>
-              </div>
             </div>
           </Reveal>
         </section>
@@ -229,7 +215,7 @@ export default function HomePage() {
               icon={<LineChart className='h-5 w-5' />}
               title='3) Fit 분석 받기'
               body='선택한 관심 공고와 내 이력서를 매칭해 원클릭으로 Fit 리포트를 생성합니다. 점수/강점/개선점과 함께 구체적인 Next Steps를 제공합니다.'
-              ctaHref='/ai-match'
+              ctaHref='/dashboard'
               ctaLabel='분석 시작하기'
               delay={250}
             />
@@ -260,9 +246,7 @@ export default function HomePage() {
                 >
                   {/* (좌) 상단: 관심 공고 */}
                   <div className='rounded-xl border border-black/5 dark:border-white/10 bg-white/70 dark:bg-white/5 p-3 lg:row-start-1 lg:col-start-1'>
-                    <div className='text-sm font-medium mb-2'>
-                      관심 공고
-                    </div>
+                    <div className='text-sm font-medium mb-2'>관심 공고</div>
                     <SmartImage
                       src='/jd-sample.png'
                       alt='관심 공고'

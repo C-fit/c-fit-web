@@ -49,12 +49,14 @@ export function DashboardBody({ user }: { user: UserShape }) {
     const el = dropRef.current;
     if (!el) return;
 
-    const prevent = (e: DragEvent) => {
+    const preventAll: EventListener = (e) => {
       e.preventDefault();
       e.stopPropagation();
     };
+
     const onDrop = (e: DragEvent) => {
-      prevent(e);
+      e.preventDefault();
+      e.stopPropagation();
       const dt = e.dataTransfer;
       if (!dt || !dt.files?.length) return;
       const f = dt.files[0];
@@ -65,31 +67,16 @@ export function DashboardBody({ user }: { user: UserShape }) {
       }
     };
 
-    ['dragenter', 'dragover', 'dragleave', 'drop'].forEach((t) =>
-      el.addEventListener(t, prevent as any)
-    );
-    el.addEventListener('drop', onDrop as any);
+    const dragHoverEvents = ['dragenter', 'dragover', 'dragleave'] as const;
+    dragHoverEvents.forEach((t) => el.addEventListener(t, preventAll));
+    el.addEventListener('drop', onDrop);
 
     return () => {
-      ['dragenter', 'dragover', 'dragleave', 'drop'].forEach((t) =>
-        el.removeEventListener(t, prevent as any)
-      );
-      el.removeEventListener('drop', onDrop as any);
+      dragHoverEvents.forEach((t) => el.removeEventListener(t, preventAll));
+      el.removeEventListener('drop', onDrop);
     };
   }, []);
 
-  useEffect(() => {
-    (async () => {
-      try {
-        const res = await fetch('/api/resume', {
-          cache: 'no-store',
-          credentials: 'include',
-        });
-        const json = await res.json();
-        setResumeOk(!!json.latest?.id); // 최신 이력서가 있으면 true
-      } catch {}
-    })();
-  }, []);
   useEffect(() => {
     (async () => {
       try {
@@ -224,7 +211,7 @@ export function DashboardBody({ user }: { user: UserShape }) {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
-        body: JSON.stringify({ jd_url: item.url }), // ✅ key 통일
+        body: JSON.stringify({ jd_url: item.url }),
       });
 
       const data = await res.json().catch(() => ({}));
@@ -233,7 +220,6 @@ export function DashboardBody({ user }: { user: UserShape }) {
 
       const resultId = data.resultId || data.id;
       if (resultId) {
-        // ✅ 완료 시 결과 페이지로 자동 이동
         router.push(`/analysis/${resultId}`);
       } else {
         alert('분석 요청이 접수되었습니다. 결과 페이지에서 확인해 주세요.');

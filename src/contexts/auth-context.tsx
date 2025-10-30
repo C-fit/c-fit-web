@@ -25,13 +25,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    // Check if user is logged in on mount
     checkAuth()
   }, [])
 
   const checkAuth = async () => {
     try {
-      const response = await fetch("/api/auth/me")
+      const response = await fetch("/api/auth/me", {
+        credentials: "include",
+        cache: "no-store",
+      })
       if (response.ok) {
         const userData = await response.json()
         setUser(userData.user)
@@ -48,12 +50,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const response = await fetch("/api/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        credentials: "include",
         body: JSON.stringify({ email, password }),
       })
 
       if (response.ok) {
-        const data = await response.json()
-        setUser(data.user)
+        await checkAuth()
         return true
       }
       return false
@@ -65,7 +67,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const logout = async () => {
     try {
-      await fetch("/api/auth/logout", { method: "POST" })
+      await fetch("/api/auth/logout", { method: "POST" , credentials: "include" })
       setUser(null)
     } catch (error) {
       console.error("Logout failed:", error)

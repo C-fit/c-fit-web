@@ -1,12 +1,8 @@
 'use client';
-
 import { useEffect, useMemo, useRef, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 
-/* =========================
-   Types
-========================= */
 type Axis = {
   id: string;
   name: string;
@@ -20,12 +16,11 @@ type Axis = {
 type DeepDiveV11 = {
   id: string;
   title: string;
-  score: number; // 0~100
+  score: number; 
   basis?: string;
-  overview?: string; // ≤500자
-  detail_md?: string; // ≤2000자, Markdown
+  overview?: string; 
+  detail_md?: string; 
   next_steps?: string[];
-  // (v1 호환용 필드, 정규화 후엔 보통 없음)
   analysis?: string;
 };
 
@@ -39,15 +34,15 @@ type FitReportV11 = {
   summary_short: string;
   summary_long: string;
   overall: { score: number; grade?: string; verdict?: string };
-  axes: Axis[]; // 반드시 5개
-  deep_dives: DeepDiveV11[]; // 반드시 4개
+  axes: Axis[]; 
+  deep_dives: DeepDiveV11[]; 
   strengths?: string[];
   gaps?: string[];
   recommendations?: { priority: string; action: string; impact?: string }[];
   confidence?: { level: number; notes?: string };
 };
 
-/* v1(raw) 용 임시 타입 (정규화 대상) */
+
 type DeepDiveV1 = Omit<DeepDiveV11, 'overview' | 'detail_md'> & {
   analysis?: string;
 };
@@ -56,9 +51,7 @@ type FitReportV1 = Omit<FitReportV11, 'version' | 'deep_dives'> & {
   deep_dives: DeepDiveV1[];
 };
 
-/* =========================
-   Type guards & helpers
-========================= */
+
 const isRecord = (v: unknown): v is Record<string, unknown> =>
   typeof v === 'object' && v !== null;
 
@@ -84,12 +77,11 @@ function isFitReportV11(v: unknown): v is FitReportV11 {
     Array.isArray(v.deep_dives) &&
     v.deep_dives.every(isDeepDiveV11) &&
     isRecord(v.overall) &&
-    isNumber((v.overall as any).score) // overall.score만 필수
+    isNumber((v.overall as { score?: unknown }).score) 
   );
 }
 
 function isDeepDiveV1(v: unknown): v is DeepDiveV1 {
-  // v1 딥다이브는 analysis만 있어도 됨
   return (
     isRecord(v) && isString(v.id) && isString(v.title) && isNumber(v.score)
   );
@@ -104,11 +96,10 @@ function isFitReportV1(v: unknown): v is FitReportV1 {
     Array.isArray(v.deep_dives) &&
     v.deep_dives.every(isDeepDiveV1) &&
     isRecord(v.overall) &&
-    isNumber((v.overall as any).score)
+    isNumber((v.overall as { score?: unknown }).score)
   );
 }
 
-/** v1 | v1.1 JSON 문자열을 안전 파싱 후 v1.1로 정규화 */
 function parseAndNormalize(input: string): FitReportV11 | null {
   const raw: unknown = JSON.parse(input);
 
@@ -117,22 +108,27 @@ function parseAndNormalize(input: string): FitReportV11 | null {
   }
 
   if (isFitReportV1(raw)) {
-    // v1 → v1.1 변환 (analysis → overview, detail_md는 공백)
     const deep_dives: DeepDiveV11[] = raw.deep_dives.map((d) => ({
       id: d.id,
       title: d.title,
       score: d.score,
       basis: isString(d.basis) ? d.basis : undefined,
-      overview: isString((d as any).overview)
-        ? (d as any).overview
-        : isString(d.analysis)
-        ? d.analysis
-        : '',
-      detail_md: isString((d as any).detail_md) ? (d as any).detail_md : '',
+      overview:
+        isRecord(d) && isString((d as Record<string, unknown>).overview)
+          ? ((d as Record<string, unknown>).overview as string)
+          : isString(d.analysis)
+          ? d.analysis
+          : '',
+      detail_md:
+        isRecord(d) && isString((d as Record<string, unknown>).detail_md)
+          ? ((d as Record<string, unknown>).detail_md as string)
+          : '',
       next_steps: Array.isArray(d.next_steps)
         ? d.next_steps.filter(isString)
         : [],
     }));
+
+    const ov = raw.overall as {score: number; grade?: unknown; verdict?: unknown};
 
     const norm: FitReportV11 = {
       version: 'fit.v1.1',
@@ -146,9 +142,9 @@ function parseAndNormalize(input: string): FitReportV11 | null {
       summary_short: isString(raw.summary_short) ? raw.summary_short : '',
       summary_long: isString(raw.summary_long) ? raw.summary_long : '',
       overall: {
-        score: raw.overall.score,
-        grade: (raw.overall as any).grade as string | undefined,
-        verdict: (raw.overall as any).verdict as string | undefined,
+        score: ov.score,
+        grade: typeof ov.grade === 'string' ? ov.grade : undefined,
+        verdict: typeof ov.verdict === 'string' ? ov.verdict : undefined,
       },
       axes: raw.axes,
       deep_dives,
@@ -157,11 +153,13 @@ function parseAndNormalize(input: string): FitReportV11 | null {
         : undefined,
       gaps: Array.isArray(raw.gaps) ? raw.gaps.filter(isString) : undefined,
       recommendations: Array.isArray(raw.recommendations)
-        ? raw.recommendations.filter(isRecord).map((r) => ({
-            priority: isString(r.priority) ? r.priority : 'P3',
-            action: isString(r.action) ? r.action : '',
-            impact: isString((r as any).impact) ? (r as any).impact : undefined,
-          }))
+         ? raw.recommendations
+            .filter(isRecord)
+            .map((r: Record<string, unknown>) => ({
+              priority: isString(r.priority) ? r.priority : 'P3',
+              action: isString(r.action) ? r.action : '',
+              impact: isString(r.impact) ? r.impact : undefined,
+            }))
         : undefined,
       confidence: isRecord(raw.confidence)
         ? (raw.confidence as FitReportV11['confidence'])
@@ -173,25 +171,11 @@ function parseAndNormalize(input: string): FitReportV11 | null {
   return null;
 }
 
-/* =========================
-   UI widgets
-========================= */
+
 function clamp01(n: number) {
   return Math.max(0, Math.min(1, n));
 }
 
-function IconBadge({ emoji }: { emoji: string }) {
-  return (
-    <div className='inline-flex items-center justify-center bg-brand-gradient p-[2px] rounded-full'>
-      <div
-        className='h-8 w-8 rounded-full flex items-center justify-center text-sm'
-        style={{ background: 'var(--background)', color: 'var(--primary)' }}
-      >
-        {emoji}
-      </div>
-    </div>
-  );
-}
 
 function RingGauge({ value, size = 148 }: { value: number; size?: number }) {
   const r = (size - 24) / 2;
@@ -527,7 +511,7 @@ export default function DemoBentoDetachedInput() {
             style={{ background: 'var(--muted)' }}
           >
             <div className='text-xs text-muted-foreground mb-1'>
-              요약(≤500자)
+              요약
             </div>
             <p className='text-sm whitespace-pre-wrap leading-relaxed'>
               {data?.summary_short || '데이터 입력 후 요약이 표시됩니다.'}
@@ -607,7 +591,7 @@ export default function DemoBentoDetachedInput() {
             {d.detail_md && (
               <details className='mt-2'>
                 <summary className='cursor-pointer text-sm underline'>
-                  자세히 보기(≤2000자)
+                  자세히 보기
                 </summary>
                 <article className='prose max-w-none mt-2 text-sm'>
                   <ReactMarkdown remarkPlugins={[remarkGfm]}>
@@ -698,7 +682,7 @@ export default function DemoBentoDetachedInput() {
 
         <BentoCard
           icon='📄'
-          title='전체 상세 보고서(≤2000자, MD 허용)'
+          title='전체 상세 보고서'
           className='col-span-12'
         >
           <article className='prose max-w-none text-sm'>
