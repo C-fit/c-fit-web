@@ -4,6 +4,10 @@ import { cookies as nextCookies } from 'next/headers';
 import { SignJWT, jwtVerify } from 'jose';
 import bcrypt from 'bcryptjs';
 import { prisma } from '@/lib/db';
+import {SignJWT, jwtVerify} from 'jose';
+import type { NextResponse } from 'next/server';
+
+
 
 // ===== Config / Types =====
 const JWT_SECRET = process.env.JWT_SECRET ?? '';
@@ -146,4 +150,39 @@ export async function requireAuth(req?: Request): Promise<PublicUser> {
   const session = await getSession(req);
   if (!session) throw new HttpError(401, 'unauthorized');
   return session.user;
+}
+
+export function clearSessionCookieOn<T extends NextResponse>(res: T): T {
+  res.cookies.set(AUTH_COOKIE, '', { path: '/', expires: new Date(0) });
+  return res;
+}
+
+
+
+export async function getUserIdFromJwtCookie() : Promise<string | null> {
+  const store = await cookies();
+  const token = store.get(AUTH_COOKIE)?.value;
+  if (!token) return null;
+  try {
+    const {payload} = await jwtVerify(token, JWT_SECRET, {
+      issuer: JWT_ISSUER,
+      audience: JWT_AUDIENCE,
+    });
+    const sub = payload.sub as string | undefined;
+    const email = payload.email as string | undefined;
+    if (!sub && !email) return null;
+    const user = sub 
+      ? await prisma.user.findUnique({where: {id: sub}})
+      : await prisma.user.findUnique({where: {email : email}});
+    return user?.id ?? null;
+  } catch {
+    return null;
+  }
+}
+
+
+export async function requireAuth() : Promise<string> {
+  const userId = await getUserIdFromJwtCookie();
+  if (!userId) throw new HttpError(401, 'Unauthorized');
+  return userId;
 }
