@@ -1,12 +1,14 @@
 // src/server/auth.ts
-import { NextResponse } from 'next/server';
+import 'server-only';
+
+import { NextResponse} from 'next/server';
 import { cookies as nextCookies } from 'next/headers';
-import { SignJWT, jwtVerify } from 'jose';
+import * as jose from 'jose';
 import bcrypt from 'bcryptjs';
 import { prisma } from '@/lib/db';
 
 // ===== Config / Types =====
-const JWT_SECRET = process.env.JWT_SECRET ?? '';
+const JWT_SECRET = process.env.JWT_SECRET ?? 'dev-secret';
 const JWT_KEY = new TextEncoder().encode(JWT_SECRET);
 
 export class HttpError extends Error {
@@ -17,12 +19,13 @@ export class HttpError extends Error {
   }
 }
 
-type SessionPayload = { sub: string }; // userId
 export type PublicUser = {
   id: string;
   email: string | null;
   name: string | null;
 };
+
+type SessionPayload = { sub: string }; // userId
 export type Session = { user: PublicUser } | null;
 
 // ===== Password (bcryptjs) =====
@@ -42,21 +45,31 @@ export async function verifyPassword(
 // ===== JWT =====
 export async function signSessionJwt(payload: SessionPayload): Promise<string> {
   if (!JWT_SECRET) throw new Error('JWT_SECRET missing');
-  return new SignJWT(payload)
+  return await new jose.SignJWT(payload)
     .setProtectedHeader({ alg: 'HS256' })
     .setIssuedAt()
     .setExpirationTime('30d')
     .sign(JWT_KEY);
 }
 
+// 편의: user 객체나 id로 바로 토큰 만들기
+export async function signSessionFromUser(
+  userOrId: { id: string } | string
+): Promise<string> {
+  const sub = typeof userOrId === 'string' ? userOrId : userOrId.id;
+  return signSessionJwt({ sub });
+}
+
 export async function verifySessionJwt(
   token: string
 ): Promise<SessionPayload & { iat: number; exp: number }> {
-  const { payload } = await jwtVerify(token, JWT_KEY);
+  const { payload } = await jose.jwtVerify(token, JWT_KEY, {
+    algorithms: ['HS256'],
+  });
   return payload as SessionPayload & { iat: number; exp: number };
 }
 
-// ===== Cookie Helpers =====
+// ===== Cookie Utils =====
 function getCookieFromHeader(
   header: string | null,
   name: string
@@ -70,8 +83,9 @@ function getCookieFromHeader(
 }
 
 /**
- * server-side read: route 핸들러에서 req를 전달하면 헤더에서 읽고,
- * 없으면 next/headers.cookies()로 읽음
+ * 세션 토큰 읽기
+ * - route handler에서 req가 있으면 헤더에서 읽고
+ * - 없으면 next/headers.cookies()에서 읽음
  */
 export async function readSessionToken(
   req?: Request
@@ -79,11 +93,11 @@ export async function readSessionToken(
   if (req) {
     return getCookieFromHeader(req.headers.get('cookie'), 'session');
   }
-  const jar = await nextCookies(); // Promise<ReadonlyRequestCookies>
+  const jar = await nextCookies(); // ❗ await 없음
   return jar.get('session')?.value;
 }
 
-/** 응답 쿠키에 세션 토큰 심기 (쓰기는 응답에서만 가능) */
+/** 응답 쿠키에 세션 토큰 심기 (쓰기는 응답에서만 안전) */
 export function attachSessionCookie<T extends NextResponse>(
   res: T,
   token: string
@@ -100,19 +114,21 @@ export function attachSessionCookie<T extends NextResponse>(
   return res;
 }
 
-/** 세션 쿠키 제거(로그아웃용) */
+/** 세션 쿠키 제거(로그아웃) */
 export function clearSessionCookie<T extends NextResponse>(res: T): T {
   res.cookies.set({
     name: 'session',
     value: '',
-    path: '/',
     httpOnly: true,
     sameSite: 'lax',
     secure: process.env.NODE_ENV === 'production',
+    path: '/',
     maxAge: 0,
   });
   return res;
 }
+
+
 
 // ===== Session APIs (getSession / guards) =====
 export async function getUserIdFromJwtCookie(
