@@ -1,81 +1,149 @@
-import { cookies } from 'next/headers';
+// src/server/auth.ts
+import { NextResponse } from 'next/server';
+import { cookies as nextCookies } from 'next/headers';
+import { SignJWT, jwtVerify } from 'jose';
+import bcrypt from 'bcryptjs';
 import { prisma } from '@/lib/db';
-import {SignJWT, jwtVerify} from 'jose';
-import type { NextResponse } from 'next/server';
 
-
-
-export const runtime = 'nodejs';
-const AUTH_COOKIE = process.env.AUTH_COOKIE_NAME ?? 'session';
-const JWT_SECRET = new TextEncoder().encode(process.env.JWT_SECRET!);
-const JWT_ISSUER = process.env.JWT_ISSUER ?? 'c-fit';
-const JWT_AUDIENCE = process.env.JWT_AUDIENCE ?? 'c-fit-web';
-const SESSION_TTL = parseInt(process.env.SESSION_TTL ?? '2592000', 10);
+// ===== Config / Types =====
+const JWT_SECRET = process.env.JWT_SECRET ?? '';
+const JWT_KEY = new TextEncoder().encode(JWT_SECRET);
 
 export class HttpError extends Error {
-  constructor(public status: number, message = 'HTTP Error') {
+  status: number;
+  constructor(status: number, message: string) {
     super(message);
-    this.name = 'HttpError';
+    this.status = status;
   }
 }
 
+type SessionPayload = { sub: string }; // userId
+export type PublicUser = {
+  id: string;
+  email: string | null;
+  name: string | null;
+};
+export type Session = { user: PublicUser } | null;
 
-export async function signSessionJwt(user: {id: string; email?: string | null}) {
-  const now = Math.floor(Date.now() / 1000);
-  return await new SignJWT({email: user.email ?? undefined})
-    .setProtectedHeader({alg: 'HS256', type: 'JWT'})
-    .setIssuedAt(now)
-    .setSubject(user.id)
-    .setIssuer(JWT_ISSUER)
-    .setAudience(JWT_AUDIENCE)
-    .setExpirationTime(now + SESSION_TTL)
-    .sign(JWT_SECRET);
+// ===== Password (bcryptjs) =====
+export async function hashPassword(plain: string): Promise<string> {
+  const salt = await bcrypt.genSalt(10);
+  return bcrypt.hash(plain, salt);
 }
 
+export async function verifyPassword(
+  plain: string,
+  hash: string
+): Promise<boolean> {
+  // $2b$... 형태 해시와 호환
+  return bcrypt.compare(plain, hash);
+}
 
+// ===== JWT =====
+export async function signSessionJwt(payload: SessionPayload): Promise<string> {
+  if (!JWT_SECRET) throw new Error('JWT_SECRET missing');
+  return new SignJWT(payload)
+    .setProtectedHeader({ alg: 'HS256' })
+    .setIssuedAt()
+    .setExpirationTime('30d')
+    .sign(JWT_KEY);
+}
 
-export async function attachSessionCookie(res: NextResponse, token: string): Promise<NextResponse> {
-  res.cookies.set(AUTH_COOKIE, token, {
+export async function verifySessionJwt(
+  token: string
+): Promise<SessionPayload & { iat: number; exp: number }> {
+  const { payload } = await jwtVerify(token, JWT_KEY);
+  return payload as SessionPayload & { iat: number; exp: number };
+}
+
+// ===== Cookie Helpers =====
+function getCookieFromHeader(
+  header: string | null,
+  name: string
+): string | undefined {
+  if (!header) return undefined;
+  for (const part of header.split(';')) {
+    const [k, ...rest] = part.trim().split('=');
+    if (k === name) return decodeURIComponent(rest.join('='));
+  }
+  return undefined;
+}
+
+/**
+ * server-side read: route 핸들러에서 req를 전달하면 헤더에서 읽고,
+ * 없으면 next/headers.cookies()로 읽음
+ */
+export async function readSessionToken(
+  req?: Request
+): Promise<string | undefined> {
+  if (req) {
+    return getCookieFromHeader(req.headers.get('cookie'), 'session');
+  }
+  const jar = await nextCookies(); // Promise<ReadonlyRequestCookies>
+  return jar.get('session')?.value;
+}
+
+/** 응답 쿠키에 세션 토큰 심기 (쓰기는 응답에서만 가능) */
+export function attachSessionCookie<T extends NextResponse>(
+  res: T,
+  token: string
+): T {
+  res.cookies.set({
+    name: 'session',
+    value: token,
     httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
     sameSite: 'lax',
+    secure: process.env.NODE_ENV === 'production',
     path: '/',
-    maxAge: SESSION_TTL,
+    maxAge: 60 * 60 * 24 * 30, // 30 days
   });
   return res;
 }
 
-export function clearSessionCookieOn<T extends NextResponse>(res: T): T {
-  res.cookies.set(AUTH_COOKIE, '', { path: '/', expires: new Date(0) });
+/** 세션 쿠키 제거(로그아웃용) */
+export function clearSessionCookie<T extends NextResponse>(res: T): T {
+  res.cookies.set({
+    name: 'session',
+    value: '',
+    path: '/',
+    httpOnly: true,
+    sameSite: 'lax',
+    secure: process.env.NODE_ENV === 'production',
+    maxAge: 0,
+  });
   return res;
 }
 
-
-
-export async function getUserIdFromJwtCookie() : Promise<string | null> {
-  const store = await cookies();
-  const token = store.get(AUTH_COOKIE)?.value;
-  if (!token) return null;
+// ===== Session APIs (getSession / guards) =====
+export async function getUserIdFromJwtCookie(
+  req?: Request
+): Promise<string | null> {
   try {
-    const {payload} = await jwtVerify(token, JWT_SECRET, {
-      issuer: JWT_ISSUER,
-      audience: JWT_AUDIENCE,
-    });
-    const sub = payload.sub as string | undefined;
-    const email = payload.email as string | undefined;
-    if (!sub && !email) return null;
-    const user = sub 
-      ? await prisma.user.findUnique({where: {id: sub}})
-      : await prisma.user.findUnique({where: {email : email}});
-    return user?.id ?? null;
+    const token = await readSessionToken(req);
+    if (!token) return null;
+    const payload = await verifySessionJwt(token);
+    return typeof payload.sub === 'string' ? payload.sub : null;
   } catch {
     return null;
   }
 }
 
+export async function getSession(req?: Request): Promise<Session> {
+  const userId = await getUserIdFromJwtCookie(req);
+  if (!userId) return null;
 
-export async function requireAuth() : Promise<string> {
-  const userId = await getUserIdFromJwtCookie();
-  if (!userId) throw new HttpError(401, 'Unauthorized');
-  return userId;
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { id: true, email: true, name: true },
+  });
+  if (!user) return null;
+
+  return { user };
+}
+
+/** 없으면 401 던짐 */
+export async function requireAuth(req?: Request): Promise<PublicUser> {
+  const session = await getSession(req);
+  if (!session) throw new HttpError(401, 'unauthorized');
+  return session.user;
 }

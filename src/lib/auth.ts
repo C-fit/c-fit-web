@@ -1,3 +1,4 @@
+//src/lib/auth.ts
 import 'server-only';
 import { SignJWT, jwtVerify, type JWTPayload } from 'jose';
 import { cookies } from 'next/headers';

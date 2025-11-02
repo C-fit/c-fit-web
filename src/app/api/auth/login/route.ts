@@ -1,48 +1,51 @@
-// src/app/api/auth/login/route.ts
+// app/api/auth/login/route.ts
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
-import { signSessionJwt, attachSessionCookie } from '@/server/auth';
+import {
+  verifyPassword,
+  signSessionJwt,
+  attachSessionCookie,
+} from '@/server/auth';
 
 export const runtime = 'nodejs';
 
-type LoginBody = {
-  email?: string;
-  password?: string;
-  name?: string | null;
-};
-
 export async function POST(req: Request) {
   try {
-    const body = (await req.json().catch(() => ({}))) as LoginBody;
-
-    const email = typeof body.email === 'string' ? body.email.trim() : '';
-    const name =
-      typeof body.name === 'string'
-        ? body.name.trim()
-        : body.name === null
-        ? null
-        : undefined;
-
-    if (!email || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
-      return NextResponse.json({ error: 'email required' }, { status: 400 });
+    const { email, password } = await req.json();
+    if (!email || !password) {
+      return NextResponse.json(
+        { error: 'missing_credentials' },
+        { status: 400 }
+      );
     }
 
-
-    const user = await prisma.user.upsert({
-      where: { email },
-      update: { ...(typeof name !== 'undefined' ? { name } : {}) },
-      create: {
-        email,
-        name: typeof name !== 'undefined' ? name : null,
-        passwordHash: 'external-auth',
-      },
-      select: { id: true, email: true, name: true },
+    const user = await prisma.user.findUnique({
+      where: { email: String(email).toLowerCase().trim() },
+      select: { id: true, email: true, name: true, passwordHash: true },
     });
+    if (!user?.passwordHash) {
+      await new Promise((r) => setTimeout(r, 150));
+      return NextResponse.json(
+        { error: 'invalid_credentials' },
+        { status: 401 }
+      );
+    }
 
-    const token = await signSessionJwt(user);
-    const res = NextResponse.json({ ok: true, user });
-    return attachSessionCookie(res, token); 
-  } catch {
+    const ok = await verifyPassword(password, user.passwordHash);
+    if (!ok)
+      return NextResponse.json(
+        { error: 'invalid_credentials' },
+        { status: 401 }
+      );
+
+    const token = await signSessionJwt({ sub: user.id });
+    const res = NextResponse.json({
+      ok: true,
+      user: { id: user.id, email: user.email, name: user.name },
+    });
+    return attachSessionCookie(res, token);
+  } catch (e) {
+    console.error('[auth/login]', e);
     return NextResponse.json({ error: 'internal_error' }, { status: 500 });
   }
 }

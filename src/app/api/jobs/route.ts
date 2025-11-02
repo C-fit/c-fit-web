@@ -1,7 +1,7 @@
 // app/api/jobs/route.ts
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
-import { getSession } from '@/lib/auth';
+import { getSession } from '@/server/auth';
 import type { Prisma as P } from '@prisma/client';
 
 function toInt(v: string | null, d: number | null = null) {
