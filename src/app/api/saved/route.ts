@@ -31,7 +31,8 @@ export async function GET() {
 export async function POST(req: NextRequest) {
   let userId: string;
   try {
-    userId = await requireAuth();
+    const user = await requireAuth();
+    userId = user.id;
   } catch (err: unknown) {
     if (err instanceof HttpError && err.status === 401) {
       return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
@@ -68,7 +69,8 @@ export async function POST(req: NextRequest) {
 export async function DELETE(req: NextRequest) {
   let userId: string;
   try {
-    userId = await requireAuth();
+    const user = await requireAuth();
+    userId = user.id;
   } catch (err: unknown) {
     if (err instanceof HttpError && err.status === 401) {
       return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
