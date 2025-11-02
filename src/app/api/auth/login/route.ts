@@ -1,48 +1,87 @@
-// src/app/api/auth/login/route.ts
-import { NextResponse } from 'next/server';
+// app/api/auth/login/route.ts
+import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
-import { signSessionJwt, attachSessionCookie } from '@/server/auth';
+import bcrypt from 'bcryptjs';
+import { SignJWT } from 'jose';
 
 export const runtime = 'nodejs';
 
-type LoginBody = {
-  email?: string;
-  password?: string;
-  name?: string | null;
-};
+const PEPPER = process.env.PASSWORD_PEPPER ?? '';
+const JWT_SECRET = process.env.JWT_SECRET ?? '';
 
-export async function POST(req: Request) {
+const key = new TextEncoder().encode(JWT_SECRET);
+
+async function signSessionJwt(payload: { sub: string; email: string }) {
+  if (!JWT_SECRET) throw new Error('JWT_SECRET is missing');
+  return await new SignJWT(payload)
+    .setProtectedHeader({ alg: 'HS256' })
+    .setIssuedAt()
+    .setExpirationTime('7d')
+    .sign(key);
+}
+
+function attachSessionCookie(res: NextResponse, token: string) {
+  res.cookies.set({
+    name: 'auth',
+    value: token,
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'lax',
+    path: '/',
+    maxAge: 60 * 60 * 24 * 7,
+  });
+  return res;
+}
+
+export async function POST(req: NextRequest) {
+  let step = 'start';
   try {
-    const body = (await req.json().catch(() => ({}))) as LoginBody;
+    const body = await req.json();
+    const email = String(body?.email ?? '')
+      .trim()
+      .toLowerCase();
+    const password = String(body?.password ?? '');
+    step = 'lookup';
 
-    const email = typeof body.email === 'string' ? body.email.trim() : '';
-    const name =
-      typeof body.name === 'string'
-        ? body.name.trim()
-        : body.name === null
-        ? null
-        : undefined;
-
-    if (!email || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
-      return NextResponse.json({ error: 'email required' }, { status: 400 });
+    const user = await prisma.user.findUnique({
+      where: { email },
+      select: { id: true, email: true, name: true, passwordHash: true },
+    });
+    if (!user?.passwordHash) {
+      return NextResponse.json(
+        { error: 'invalid_credentials' },
+        { status: 401 }
+      );
     }
 
+    step = 'compare';
+    const ok = await bcrypt.compare(password + PEPPER, user.passwordHash);
+    if (!ok) {
+      return NextResponse.json(
+        { error: 'invalid_credentials' },
+        { status: 401 }
+      );
+    }
 
-    const user = await prisma.user.upsert({
-      where: { email },
-      update: { ...(typeof name !== 'undefined' ? { name } : {}) },
-      create: {
-        email,
-        name: typeof name !== 'undefined' ? name : null,
-        passwordHash: 'external-auth',
-      },
-      select: { id: true, email: true, name: true },
+    step = 'sign';
+    const token = await signSessionJwt({
+      sub: String(user.id),
+      email: user.email,
     });
 
-    const token = await signSessionJwt(user);
-    const res = NextResponse.json({ ok: true, user });
-    return attachSessionCookie(res, token); 
-  } catch {
-    return NextResponse.json({ error: 'internal_error' }, { status: 500 });
+    step = 'respond';
+    const safeUser = {
+      id: String(user.id),
+      email: user.email,
+      name: user.name ?? null,
+    };
+    const res = NextResponse.json({ ok: true, user: safeUser });
+    return attachSessionCookie(res, token);
+  } catch (e) {
+    console.error('[auth/login]', step, e);
+    return NextResponse.json(
+      { error: 'internal_error', step },
+      { status: 500 }
+    );
   }
 }
