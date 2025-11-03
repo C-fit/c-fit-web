@@ -52,7 +52,7 @@ export async function signSessionJwt(payload: SessionPayload): Promise<string> {
     .sign(JWT_KEY);
 }
 
-// 편의: user 객체나 id로 바로 토큰 만들기
+
 export async function signSessionFromUser(
   userOrId: { id: string } | string
 ): Promise<string> {
@@ -82,11 +82,7 @@ function getCookieFromHeader(
   return undefined;
 }
 
-/**
- * 세션 토큰 읽기
- * - route handler에서 req가 있으면 헤더에서 읽고
- * - 없으면 next/headers.cookies()에서 읽음
- */
+
 export async function readSessionToken(
   req?: Request
 ): Promise<string | undefined> {
@@ -97,7 +93,7 @@ export async function readSessionToken(
   return jar.get('session')?.value;
 }
 
-/** 응답 쿠키에 세션 토큰 심기 (쓰기는 응답에서만 안전) */
+
 export function attachSessionCookie<T extends NextResponse>(
   res: T,
   token: string
@@ -114,7 +110,7 @@ export function attachSessionCookie<T extends NextResponse>(
   return res;
 }
 
-/** 세션 쿠키 제거(로그아웃) */
+
 export function clearSessionCookie<T extends NextResponse>(res: T): T {
   res.cookies.set({
     name: 'session',
@@ -130,7 +126,6 @@ export function clearSessionCookie<T extends NextResponse>(res: T): T {
 
 
 
-// ===== Session APIs (getSession / guards) =====
 export async function getUserIdFromJwtCookie(
   req?: Request
 ): Promise<string | null> {
@@ -157,7 +152,6 @@ export async function getSession(req?: Request): Promise<Session> {
   return { user };
 }
 
-/** 없으면 401 던짐 */
 export async function requireAuth(req?: Request): Promise<PublicUser> {
   const session = await getSession(req);
   if (!session) throw new HttpError(401, 'unauthorized');
