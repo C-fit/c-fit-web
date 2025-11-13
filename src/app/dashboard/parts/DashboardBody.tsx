@@ -5,6 +5,13 @@ import { Navigation } from '@/components/navigation';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from '@/components/ui/dialog';
 import { Upload, FileText, Sparkles, Loader2 } from 'lucide-react';
 import { X } from 'lucide-react';
 import { useRouter } from 'next/navigation';
@@ -43,6 +50,9 @@ export function DashboardBody({ user }: { user: UserShape }) {
   // --- 관심 공고 목록 ---
   const [saved, setSaved] = useState<SavedItem[]>([]);
   const [savedLoading, setSavedLoading] = useState(false);
+
+  //--Fit 분석 요청---
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
 
   // drag & drop 리스너
   useEffect(() => {
@@ -205,6 +215,8 @@ export function DashboardBody({ user }: { user: UserShape }) {
       return;
     }
 
+    setIsAnalyzing(true);
+
     try {
       // JSON 경로: 서버가 최신 이력서를 자동 사용
       const res = await fetch('/api/fit/analyze', {
@@ -226,6 +238,8 @@ export function DashboardBody({ user }: { user: UserShape }) {
       }
     } catch (e) {
       alert(`분석 요청에 실패했습니다. ${(e as Error).message || ''}`);
+    } finally {
+      setIsAnalyzing(false);
     }
   }
 
@@ -401,7 +415,7 @@ export function DashboardBody({ user }: { user: UserShape }) {
                         </Button>
                         <Button
                           size='sm'
-                          variant='gradient' // gradient variant 추가해두셨다면 사용, 아니면 'default'
+                          variant='gradient'
                           className='whitespace-nowrap'
                           onClick={() => analyzeFit(it)}
                         >
@@ -416,6 +430,17 @@ export function DashboardBody({ user }: { user: UserShape }) {
             </CardContent>
           </Card>
         </div>
+        <Dialog open={isAnalyzing} onOpenChange={setIsAnalyzing}>
+          <DialogContent className='sm:max-w-[380px]'>
+            <DialogHeader className='space-y-2'>
+              <div className='flex items-center gap-3'>
+                <Loader2 className='h-5 w-5 animate-spin' />
+                <DialogTitle>이력서를 분석 중입니다</DialogTitle>
+              </div>
+              <DialogDescription>잠시만 기다려주세요(1~2분 소요)</DialogDescription>
+            </DialogHeader>
+          </DialogContent>
+        </Dialog>
       </main>
     </div>
   );
