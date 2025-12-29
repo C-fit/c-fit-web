@@ -5,9 +5,28 @@ import { Navigation } from '@/components/navigation';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from '@/components/ui/dialog';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+
 import { Upload, FileText, Sparkles, Loader2 } from 'lucide-react';
 import { X } from 'lucide-react';
 import { useRouter } from 'next/navigation';
+import { toast } from '@/hooks/use-toast';
 
 type SavedItem = {
   id: string;
@@ -31,10 +50,13 @@ export function DashboardBody({ user }: { user: UserShape }) {
   // --- 이력서 업로드 ---
   const [file, setFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
+  const [openRemoveResume, setOpenRemoveResume] = useState(false);
+  const [removingResume, setRemovingResume] = useState(false);
   const [resumeOk, setResumeOk] = useState<boolean>(false);
   const dropRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const [resumeMeta, setResumeMeta] = useState<ResumeMeta | null>(null);
+  const [openNeedResume, setOpenNeedResume] = useState(false);
   const fmtBytes = (n: number) =>
     n >= 1024 * 1024
       ? `${(n / (1024 * 1024)).toFixed(2)} MB`
@@ -43,6 +65,9 @@ export function DashboardBody({ user }: { user: UserShape }) {
   // --- 관심 공고 목록 ---
   const [saved, setSaved] = useState<SavedItem[]>([]);
   const [savedLoading, setSavedLoading] = useState(false);
+
+  //--Fit 분석 요청---
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
 
   // drag & drop 리스너
   useEffect(() => {
@@ -63,7 +88,11 @@ export function DashboardBody({ user }: { user: UserShape }) {
       if (f && f.type === 'application/pdf') {
         setFile(f);
       } else {
-        alert('PDF 파일만 업로드할 수 있습니다.');
+        toast({
+          variant: 'destructive',
+          title: '업로드 실패',
+          description: 'PDF 파일만 업로드할 수 있습니다.',
+        });
       }
     };
 
@@ -143,15 +172,28 @@ export function DashboardBody({ user }: { user: UserShape }) {
       // 낙관적 업데이트
       setSaved((prev) => prev.filter((s) => s.id !== id));
     } catch {
-      alert('관심공고 해제에 실패했습니다. 잠시 후 다시 시도해 주세요.');
+      toast({
+        variant: 'destructive',
+        title: '관심공고 해제 실패',
+        description: '잠시 후 다시 시도해 주세요.',
+      });
     }
   }
 
   // 업로드 실행
   async function handleUpload() {
-    if (!file) return alert('PDF 파일을 선택해 주세요.');
+    if (!file)
+      return toast({
+        variant: 'destructive',
+        title: '업로드 실패',
+        description: 'PDF 파일을 선택해 주세요.',
+      });
     if (file.type !== 'application/pdf')
-      return alert('PDF 파일만 업로드할 수 있습니다.');
+      return toast({
+        variant: 'destructive',
+        title: '업로드 실패',
+        description: 'PDF 파일만 업로드할 수 있습니다.',
+      });
     setUploading(true);
     try {
       const fd = new FormData();
@@ -168,42 +210,59 @@ export function DashboardBody({ user }: { user: UserShape }) {
         setResumeMeta(json.latest);
       }
       setResumeOk(true);
-      alert('이력서가 업로드되었습니다.');
+      toast({
+        title: '업로드 성공',
+        description: '이력서가 업로드되었습니다.',
+      });
     } catch {
-      alert('업로드에 실패했습니다. 잠시 후 다시 시도해 주세요.');
+      toast({
+        variant: 'destructive',
+        title: '업로드 실패',
+        description: '업로드에 실패했습니다. 잠시 후 다시 시도해 주세요.',
+      });
     } finally {
       setUploading(false);
     }
   }
 
   // 업로드된 이력서 삭제
-  async function removeResume() {
-    const go = confirm('업로드된 이력서를 삭제할까요?');
-    if (!go) return;
+  async function removeResumeConfirmed() {
+    setRemovingResume(true);
     try {
       const res = await fetch('/api/resume', {
         method: 'DELETE',
         credentials: 'include',
       });
       if (!res.ok) throw new Error();
+
       setResumeMeta(null);
       setResumeOk(false);
       setFile(null);
-      alert('삭제되었습니다. 새로운 이력서를 업로드해 주세요.');
+
+      toast({
+        title: '삭제 완료',
+        description: '새로운 이력서를 업로드해 주세요.',
+      });
     } catch {
-      alert('삭제에 실패했습니다. 잠시 후 다시 시도해 주세요.');
+      toast({
+        variant: 'destructive',
+        title: '삭제 실패',
+        description: '잠시 후 다시 시도해 주세요.',
+      });
+    } finally {
+      setRemovingResume(false);
+      setOpenRemoveResume(false);
     }
   }
 
   // FIT 분석
   async function analyzeFit(item: SavedItem) {
     if (!resumeOk) {
-      const go = confirm(
-        '이력서가 업로드되어 있어야 합니다. 지금 업로드하시겠어요?'
-      );
-      if (go) dropRef.current?.scrollIntoView({ behavior: 'smooth' });
+      setOpenNeedResume(true);
       return;
     }
+
+    setIsAnalyzing(true);
 
     try {
       // JSON 경로: 서버가 최신 이력서를 자동 사용
@@ -222,10 +281,20 @@ export function DashboardBody({ user }: { user: UserShape }) {
       if (resultId) {
         router.push(`/analysis/${resultId}`);
       } else {
-        alert('분석 요청이 접수되었습니다. 결과 페이지에서 확인해 주세요.');
+        toast({
+          title: '분석 요청 접수',
+          description:
+            '분석 요청이 접수되었습니다. 결과 페이지에서 확인해 주세요.',
+        });
       }
     } catch (e) {
-      alert(`분석 요청에 실패했습니다. ${(e as Error).message || ''}`);
+      toast({
+        variant: 'destructive',
+        title: '분석 요청 실패',
+        description: '분석 요청에 실패했습니다. 잠시 후 다시 시도해 주세요.',
+      });
+    } finally {
+      setIsAnalyzing(false);
     }
   }
 
@@ -268,12 +337,39 @@ export function DashboardBody({ user }: { user: UserShape }) {
                   <Button
                     variant='ghost'
                     size='icon'
-                    onClick={removeResume}
+                    onClick={() => setOpenRemoveResume(true)}
                     className='hover:bg-destructive/10 text-destructive'
                     title='이력서 삭제'
                   >
                     <X className='h-4 w-4' />
                   </Button>
+                  <AlertDialog
+                    open={openRemoveResume}
+                    onOpenChange={setOpenRemoveResume}
+                  >
+                    <AlertDialogContent>
+                      <AlertDialogHeader>
+                        <AlertDialogTitle>
+                          이력서를 삭제할까요?
+                        </AlertDialogTitle>
+                        <AlertDialogDescription>
+                          삭제하면 현재 업로드된 이력서 파일을 다시 사용할 수
+                          없습니다.
+                        </AlertDialogDescription>
+                      </AlertDialogHeader>
+                      <AlertDialogFooter>
+                        <AlertDialogCancel disabled={removingResume}>
+                          취소
+                        </AlertDialogCancel>
+                        <AlertDialogAction
+                          onClick={removeResumeConfirmed}
+                          disabled={removingResume}
+                        >
+                          {removingResume ? '삭제 중...' : '삭제'}
+                        </AlertDialogAction>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
                 </div>
               )}
 
@@ -336,6 +432,33 @@ export function DashboardBody({ user }: { user: UserShape }) {
                   이력서 업로드 완료 ✅
                 </div>
               )}
+
+              <AlertDialog
+                open={openNeedResume}
+                onOpenChange={setOpenNeedResume}
+              >
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>
+                      이력서 업로드가 필요합니다
+                    </AlertDialogTitle>
+                    <AlertDialogDescription>
+                      FIT 분석을 하려면 먼저 이력서를 업로드해 주세요.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>나중에</AlertDialogCancel>
+                    <AlertDialogAction
+                      onClick={() => {
+                        setOpenNeedResume(false);
+                        dropRef.current?.scrollIntoView({ behavior: 'smooth' });
+                      }}
+                    >
+                      업로드하러 가기
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
             </CardContent>
           </Card>
 
@@ -401,7 +524,7 @@ export function DashboardBody({ user }: { user: UserShape }) {
                         </Button>
                         <Button
                           size='sm'
-                          variant='gradient' // gradient variant 추가해두셨다면 사용, 아니면 'default'
+                          variant='gradient'
                           className='whitespace-nowrap'
                           onClick={() => analyzeFit(it)}
                         >
@@ -416,6 +539,19 @@ export function DashboardBody({ user }: { user: UserShape }) {
             </CardContent>
           </Card>
         </div>
+        <Dialog open={isAnalyzing} onOpenChange={setIsAnalyzing}>
+          <DialogContent className='sm:max-w-[380px]'>
+            <DialogHeader className='space-y-2'>
+              <div className='flex items-center gap-3'>
+                <Loader2 className='h-5 w-5 animate-spin' />
+                <DialogTitle>이력서를 분석 중입니다</DialogTitle>
+              </div>
+              <DialogDescription>
+                잠시만 기다려주세요(1~2분 소요)
+              </DialogDescription>
+            </DialogHeader>
+          </DialogContent>
+        </Dialog>
       </main>
     </div>
   );

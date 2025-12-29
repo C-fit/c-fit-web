@@ -10,19 +10,20 @@ import {
 import { Button } from '@/components/ui/button';
 import { Bookmark, ExternalLink } from 'lucide-react';
 import { useState } from 'react';
+import { toast } from '@/hooks/use-toast';
 
 type Item = {
-  id: string
-  url: string
-  companyName?: string | null
-  title: string
-  jobName?: string | null
-  experienceLevel?: string | null
-  careerYears: number[]
-  location?: string | null
-  deadline?: string | null
-  saved?: boolean
-}
+  id: string;
+  url: string;
+  companyName?: string | null;
+  title: string;
+  jobName?: string | null;
+  experienceLevel?: string | null;
+  careerYears: number[];
+  location?: string | null;
+  deadline?: string | null;
+  saved?: boolean;
+};
 
 export function JobCard({
   item,
@@ -31,19 +32,20 @@ export function JobCard({
   item: Item;
   onSavedChange?: (id: string, saved: boolean) => void;
 }) {
-  const [pending] = useState(false);
+  const [pending, setPending] = useState(false);
   const [saved, setSaved] = useState(!!item.saved);
 
   async function toggleSave() {
+    if (pending) return
+    setPending(true);
     try {
       const res = await fetch('/api/saved', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        credentials: 'include', // ← 쿠키 포함
+        credentials: 'include',
         body: JSON.stringify({ jobId: item.id, save: !saved }),
       });
       if (res.status === 401) {
-        // 로그인 만료/미로그인: 로그인 페이지로 유도
         window.location.href =
           '/login?next=' + encodeURIComponent(window.location.pathname);
         return;
@@ -54,7 +56,12 @@ export function JobCard({
       onSavedChange?.(item.id, !!data.saved);
     } catch (e) {
       console.error(e);
-      alert('관심공고 저장에 실패했습니다.');
+      toast({
+        variant: 'destructive',
+        title: '관심공고 저장 실패',
+        description:
+          '관심공고 저장에 실패했습니다. 잠시 후 다시 시도해 주세요.',
+      });
     }
   }
 

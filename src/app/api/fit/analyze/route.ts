@@ -15,7 +15,7 @@ const KEY = process.env.LLM_API_KEY ?? '';
 const KEY_HEADER = process.env.LLM_API_KEY_HEADER ?? 'Authorization';
 const DEBUG = (process.env.DEBUG_FIT ?? '0') === '1';
 
-// timeouts
+
 const TIMEOUT_MS = Number(process.env.TIMEOUT_MS ?? 1200000); // 20m
 const FIT_T = Number(process.env.FIT_TIMEOUT_MS ?? TIMEOUT_MS ?? 480000);
 
