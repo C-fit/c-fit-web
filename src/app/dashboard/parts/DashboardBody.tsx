@@ -162,16 +162,21 @@ export function DashboardBody({ user }: { user: UserShape }) {
   }, []);
 
   // 삭제 핸들러
-  async function removeSaved(id: string) {
+  async function removeSaved(jobId: string) {
+    const snapshot = saved;
+    setSaved((prev) => prev.filter((s) => s.id !== jobId));
     try {
-      const res = await fetch(`/api/saved?id=${encodeURIComponent(id)}`, {
+      const res = await fetch(`/api/saved?id=${encodeURIComponent(jobId)}`, {
         method: 'DELETE',
         credentials: 'include',
       });
       if (!res.ok) throw new Error('failed');
-      // 낙관적 업데이트
-      setSaved((prev) => prev.filter((s) => s.id !== id));
+      toast({
+        title: '관심공고 해제 완료',
+        description: '관심공고에서 해제되었습니다.',
+      });
     } catch {
+      setSaved(snapshot);
       toast({
         variant: 'destructive',
         title: '관심공고 해제 실패',
@@ -287,7 +292,7 @@ export function DashboardBody({ user }: { user: UserShape }) {
             '분석 요청이 접수되었습니다. 결과 페이지에서 확인해 주세요.',
         });
       }
-    } catch (e) {
+    } catch {
       toast({
         variant: 'destructive',
         title: '분석 요청 실패',

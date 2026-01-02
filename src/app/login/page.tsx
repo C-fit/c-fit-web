@@ -28,7 +28,7 @@ export default function LoginPage() {
     const success = await login(email, password)
 
     if (success) {
-      router.push("/dashboard")
+      router.push("/")
     } else {
       setError("이메일 또는 비밀번호가 올바르지 않습니다.")
     }

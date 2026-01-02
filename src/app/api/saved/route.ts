@@ -78,12 +78,14 @@ export async function DELETE(req: NextRequest) {
     throw err;
   }
 
-  const id = new URL(req.url).searchParams.get('id');
-  if (!id) return NextResponse.json({ error: 'id required' }, { status: 400 });
+  const sp = new URL(req.url).searchParams;
 
-  // 본인 소유만 안전하게 삭제 (없어도 에러 없이 넘어가도록)
+  const jobId = sp.get('jobId') ?? sp.get('id');
+
+  if (!jobId) return NextResponse.json({ error: 'jobId required' }, { status: 400 });
+
   const { count } = await prisma.savedJob.deleteMany({
-    where: { id, userId },
+    where: { id: jobId, userId },
   });
 
   return NextResponse.json({ ok: true, deleted: count });
