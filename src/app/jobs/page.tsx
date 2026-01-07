@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import { Navigation } from '@/components/navigation';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -109,14 +109,20 @@ function clampInt(
   return Math.min(max, Math.max(min, n));
 }
 
-export default function JobsPage() {
+function normalizeSort(v: string | undefined): Sort {
+  if (v === 'company' || v === 'title' || v === 'recent') return v;
+  return 'recent';
+}
+
+function JobsPageInner() {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const spString = searchParams.toString();
 
   const query = useMemo(() => {
-    const get = (k: string) => searchParams.get(k) ?? undefined;
+    const sp = new URLSearchParams(spString);
+    const get = (k: string) => sp.get(k) ?? undefined;
 
     return {
       q: get('q'),
@@ -124,11 +130,11 @@ export default function JobsPage() {
       company: get('company'),
       minYear: get('minYear'),
       maxYear: get('maxYear'),
-      sort: (get('sort') as Sort) ?? 'recent',
+      sort: normalizeSort(get('sort')),
       page: get('page') ?? '1',
       pageSize: get('pageSize') ?? '20',
     } satisfies UrlQuery;
-  }, [searchParams]);
+  }, [spString]);
 
   const page = clampInt(query.page, 1, 9999, 1);
   const pageSize = clampInt(query.pageSize, 10, 50, 20);
@@ -158,6 +164,7 @@ export default function JobsPage() {
     [router, pathname, spString]
   );
 
+  // ---- UI state (URL과 동기화) ----
   const [qInput, setQInput] = useState('');
   const [companyInput, setCompanyInput] = useState('');
 
@@ -167,6 +174,7 @@ export default function JobsPage() {
 
   const [years, setYears] = useState<[number, number]>([0, 20]);
 
+  // URL -> UI state
   useEffect(() => {
     setQInput(query.q ?? '');
     setCompanyInput(query.company ?? '');
@@ -186,6 +194,7 @@ export default function JobsPage() {
     setYears([a, b]);
   }, [query.q, query.company, query.job, query.minYear, query.maxYear]);
 
+  // 검색어 디바운스 -> URL 반영
   useEffect(() => {
     const t = setTimeout(() => {
       setQuery({ q: qInput || undefined }, { resetPage: true, replace: true });
@@ -193,6 +202,7 @@ export default function JobsPage() {
     return () => clearTimeout(t);
   }, [qInput, setQuery]);
 
+  // 회사 디바운스 -> URL 반영
   useEffect(() => {
     const t = setTimeout(() => {
       setQuery(
@@ -203,6 +213,7 @@ export default function JobsPage() {
     return () => clearTimeout(t);
   }, [companyInput, setQuery]);
 
+  // 경력 슬라이더 디바운스 -> URL 반영
   useEffect(() => {
     const t = setTimeout(() => {
       setQuery(
@@ -213,6 +224,7 @@ export default function JobsPage() {
     return () => clearTimeout(t);
   }, [years, setQuery]);
 
+  // ---- Fetch (URL 기반) ----
   const [data, setData] = useState<ApiResp | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -271,270 +283,280 @@ export default function JobsPage() {
   }
 
   return (
-    <>
-      <Navigation />
+    <main className='container mx-auto px-4 py-6 space-y-6'>
+      {/* 헤더: 제목 + 초기화 */}
+      <div className='flex items-center justify-between gap-2 flex-wrap w-full'>
+        <h1 className='text-2xl font-semibold min-w-0'>채용공고 검색</h1>
 
-      <main className='container mx-auto px-4 py-6 space-y-6'>
-        {/* 헤더: 제목 + 초기화 */}
-        <div className='flex items-center justify-between gap-2 flex-wrap w-full'>
-          <h1 className='text-2xl font-semibold min-w-0'>채용공고 검색</h1>
+        <div className='flex items-center gap-2 shrink-0'>
+          <Button
+            variant='outline'
+            className='h-9 whitespace-nowrap'
+            onClick={clearFilters}
+            type='button'
+          >
+            필터 초기화
+          </Button>
+        </div>
+      </div>
 
-          <div className='flex items-center gap-2 shrink-0'>
-            <Button
-              variant='outline'
-              className='h-9 whitespace-nowrap'
-              onClick={clearFilters}
-              type='button'
+      {/* Filters */}
+      <div className='grid grid-cols-1 md:grid-cols-4 gap-4 items-end mt-2'>
+        {/* 검색어 */}
+        <div className='space-y-1'>
+          <Label>검색어</Label>
+          <Input
+            placeholder='제목/회사/직무…'
+            value={qInput}
+            onChange={(e) => setQInput(e.target.value)}
+          />
+        </div>
+
+        {/* 직무 선택 (모달) */}
+        <div className='space-y-1 md:col-span-2'>
+          <Label>직무 선택</Label>
+
+          <Dialog open={jobOpen} onOpenChange={setJobOpen}>
+            <DialogTrigger asChild>
+              <Button
+                variant='outline'
+                role='combobox'
+                className={`
+                  w-full justify-between font-normal
+                  ${job.length === 0 ? 'text-muted-foreground' : ''}
+                `}
+                type='button'
+              >
+                {job.length === 0 ? '직무 선택' : `${job.join(', ')}`}
+                <ChevronDown className='ml-2 h-4 w-4 shrink-0 opacity-50' />
+              </Button>
+            </DialogTrigger>
+
+            <DialogContent className='sm:max-w-[680px]'>
+              <DialogHeader>
+                <DialogTitle>직무 선택</DialogTitle>
+              </DialogHeader>
+
+              <Input
+                placeholder='보유 직무를 검색하세요.'
+                value={jobQuery}
+                onChange={(e) => setJobQuery(e.target.value)}
+                className='mt-2'
+              />
+
+              <div className='mt-3 flex flex-wrap gap-2'>
+                {JOB_CATEGORIES.filter((v) =>
+                  jobQuery.trim()
+                    ? v.toLowerCase().includes(jobQuery.toLowerCase())
+                    : true
+                ).map((cat) => {
+                  const active = job.includes(cat);
+                  return (
+                    <Button
+                      key={cat}
+                      type='button'
+                      variant={active ? 'default' : 'outline'}
+                      className='h-9 rounded-full'
+                      onClick={() =>
+                        setJob((prev) =>
+                          prev.includes(cat)
+                            ? prev.filter((x) => x !== cat)
+                            : [...prev, cat]
+                        )
+                      }
+                    >
+                      {cat}
+                    </Button>
+                  );
+                })}
+              </div>
+
+              {job.length > 0 && (
+                <div className='mt-3 flex flex-wrap gap-2'>
+                  {job.map((j) => (
+                    <Button
+                      key={j}
+                      type='button'
+                      variant='secondary'
+                      className='h-8 rounded-full pr-2'
+                      onClick={() =>
+                        setJob((prev) => prev.filter((x) => x !== j))
+                      }
+                    >
+                      <span className='mr-1'>{j}</span>
+                      <X className='size-4' />
+                    </Button>
+                  ))}
+                </div>
+              )}
+
+              <DialogFooter className='mt-4'>
+                <Button
+                  variant='ghost'
+                  type='button'
+                  onClick={() => {
+                    setJob([]);
+                    setJobQuery('');
+                  }}
+                >
+                  초기화
+                </Button>
+
+                <Button
+                  type='button'
+                  onClick={() => {
+                    const jobStr = job.length ? job.join(',') : undefined;
+                    setQuery(
+                      { job: jobStr },
+                      { resetPage: true, replace: false }
+                    );
+                    setJobOpen(false);
+                  }}
+                >
+                  적용
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+        </div>
+
+        {/* 회사명 */}
+        <div className='space-y-1'>
+          <Label>회사</Label>
+          <Input
+            placeholder='회사명'
+            value={companyInput}
+            onChange={(e) => setCompanyInput(e.target.value)}
+          />
+        </div>
+
+        {/* 정렬 */}
+        <div className='space-y-1'>
+          <Label>정렬</Label>
+          <Select
+            value={sort}
+            onValueChange={(v: Sort) => {
+              setQuery({ sort: v }, { resetPage: true, replace: true });
+            }}
+          >
+            <SelectTrigger>
+              <SelectValue placeholder='정렬' />
+            </SelectTrigger>
+            <SelectContent
+              position='popper'
+              className='z-[70] bg-white dark:bg-neutral-900 border shadow-md'
             >
-              필터 초기화
-            </Button>
+              <SelectItem value='recent'>최신순</SelectItem>
+              <SelectItem value='company'>회사명</SelectItem>
+              <SelectItem value='title'>제목</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+
+        {/* 경력 구간 */}
+        <div className='space-y-1 md:col-span-2'>
+          <Label>경력 구간 (년)</Label>
+          <div className='px-2'>
+            <Slider
+              min={0}
+              max={20}
+              step={1}
+              value={years}
+              onValueChange={(v) => setYears([v[0], v[1]] as [number, number])}
+            />
+          </div>
+
+          <div className='text-sm text-muted-foreground'>
+            선택: {years[0]} ~ {years[1]}년
           </div>
         </div>
 
-        {/* Filters */}
-        <div className='grid grid-cols-1 md:grid-cols-4 gap-4 items-end mt-2'>
-          {/* 검색어 */}
-          <div className='space-y-1'>
-            <Label>검색어</Label>
-            <Input
-              placeholder='제목/회사/직무…'
-              value={qInput}
-              onChange={(e) => setQInput(e.target.value)}
-            />
+        {/* 우상단: 총 건수 / 페이지당 */}
+        <div className='space-y-1 md:col-span-1 md:justify-self-end flex items-end justify-between gap-3'>
+          <div className='text-sm text-muted-foreground'>
+            {loading ? '불러오는 중…' : data ? `총 ${data.total}건` : ''}
           </div>
 
-          {/* 직무 선택 (모달) */}
-          <div className='space-y-1 md:col-span-2'>
-            <Label>직무 선택</Label>
-
-            <Dialog open={jobOpen} onOpenChange={setJobOpen}>
-              <DialogTrigger asChild>
-                <Button
-                  variant='outline'
-                  role='combobox'
-                  className={`
-                    w-full justify-between font-normal
-                    ${job.length === 0 ? 'text-muted-foreground' : ''}
-                  `}
-                  type='button'
-                >
-                  {job.length === 0 ? '직무 선택' : `${job.join(', ')}`}
-                  <ChevronDown className='ml-2 h-4 w-4 shrink-0 opacity-50' />
-                </Button>
-              </DialogTrigger>
-
-              <DialogContent className='sm:max-w-[680px]'>
-                <DialogHeader>
-                  <DialogTitle>직무 선택</DialogTitle>
-                </DialogHeader>
-
-                <Input
-                  placeholder='보유 직무를 검색하세요.'
-                  value={jobQuery}
-                  onChange={(e) => setJobQuery(e.target.value)}
-                  className='mt-2'
-                />
-
-                <div className='mt-3 flex flex-wrap gap-2'>
-                  {JOB_CATEGORIES.filter((v) =>
-                    jobQuery.trim()
-                      ? v.toLowerCase().includes(jobQuery.toLowerCase())
-                      : true
-                  ).map((cat) => {
-                    const active = job.includes(cat);
-                    return (
-                      <Button
-                        key={cat}
-                        type='button'
-                        variant={active ? 'default' : 'outline'}
-                        className='h-9 rounded-full'
-                        onClick={() =>
-                          setJob((prev) =>
-                            prev.includes(cat)
-                              ? prev.filter((x) => x !== cat)
-                              : [...prev, cat]
-                          )
-                        }
-                      >
-                        {cat}
-                      </Button>
-                    );
-                  })}
-                </div>
-
-                {job.length > 0 && (
-                  <div className='mt-3 flex flex-wrap gap-2'>
-                    {job.map((j) => (
-                      <Button
-                        key={j}
-                        type='button'
-                        variant='secondary'
-                        className='h-8 rounded-full pr-2'
-                        onClick={() =>
-                          setJob((prev) => prev.filter((x) => x !== j))
-                        }
-                      >
-                        <span className='mr-1'>{j}</span>
-                        <X className='size-4' />
-                      </Button>
-                    ))}
-                  </div>
-                )}
-
-                <DialogFooter className='mt-4'>
-                  <Button
-                    variant='ghost'
-                    type='button'
-                    onClick={() => {
-                      setJob([]);
-                      setJobQuery('');
-                    }}
-                  >
-                    초기화
-                  </Button>
-
-                  <Button
-                    type='button'
-                    onClick={() => {
-                      // ✅ 여기서 URL 반영 (job=... , page=1)
-                      const jobStr = job.length ? job.join(',') : undefined;
-                      setQuery(
-                        { job: jobStr },
-                        { resetPage: true, replace: false }
-                      ); // apply는 push 느낌
-                      setJobOpen(false);
-                    }}
-                  >
-                    적용
-                  </Button>
-                </DialogFooter>
-              </DialogContent>
-            </Dialog>
-          </div>
-
-          {/* 회사명 */}
-          <div className='space-y-1'>
-            <Label>회사</Label>
-            <Input
-              placeholder='회사명'
-              value={companyInput}
-              onChange={(e) => setCompanyInput(e.target.value)}
-            />
-          </div>
-
-          {/* 정렬 */}
-          <div className='space-y-1'>
-            <Label>정렬</Label>
+          <div className='flex items-center gap-2'>
+            <Label className='text-sm'>페이지당</Label>
             <Select
-              value={sort}
-              onValueChange={(v: 'recent' | 'company' | 'title') => {
-                setQuery({ sort: v }, { resetPage: true, replace: true });
+              value={String(pageSize)}
+              onValueChange={(v) => {
+                setQuery({ pageSize: v }, { resetPage: true, replace: true });
               }}
             >
-              <SelectTrigger>
-                <SelectValue placeholder='정렬' />
+              <SelectTrigger className='w-24'>
+                <SelectValue />
               </SelectTrigger>
               <SelectContent
                 position='popper'
                 className='z-[70] bg-white dark:bg-neutral-900 border shadow-md'
               >
-                <SelectItem value='recent'>최신순</SelectItem>
-                <SelectItem value='company'>회사명</SelectItem>
-                <SelectItem value='title'>제목</SelectItem>
+                <SelectItem value='10'>10</SelectItem>
+                <SelectItem value='20'>20</SelectItem>
+                <SelectItem value='50'>50</SelectItem>
               </SelectContent>
             </Select>
           </div>
+        </div>
+      </div>
 
-          {/* 경력 구간 */}
-          <div className='space-y-1 md:col-span-2'>
-            <Label>경력 구간 (년)</Label>
-            <div className='px-2'>
-              <Slider
-                min={0}
-                max={20}
-                step={1}
-                value={years}
-                onValueChange={(v) =>
-                  setYears([v[0], v[1]] as [number, number])
-                }
-              />
-            </div>
+      {/* 채용공고 목록 */}
+      <div className='grid sm:grid-cols-2 lg:grid-cols-3 gap-4'>
+        {data?.items.map((it) => (
+          <JobCard key={it.id} item={it} />
+        ))}
+      </div>
 
-            <div className='text-sm text-muted-foreground'>
-              선택: {years[0]} ~ {years[1]}년
-            </div>
-          </div>
+      {/* 페이지네이션 */}
+      <div className='flex items-center justify-center gap-3 pt-2'>
+        <Button
+          variant='outline'
+          size='sm'
+          onClick={() =>
+            setQuery(
+              { page: String(Math.max(1, page - 1)) },
+              { replace: false }
+            )
+          }
+          disabled={page <= 1 || loading}
+        >
+          이전
+        </Button>
 
-          {/* 우상단: 총 건수 / 페이지당 */}
-          <div className='space-y-1 md:col-span-1 md:justify-self-end flex items-end justify-between gap-3'>
-            <div className='text-sm text-muted-foreground'>
-              {loading ? '불러오는 중…' : data ? `총 ${data.total}건` : ''}
-            </div>
-
-            <div className='flex items-center gap-2'>
-              <Label className='text-sm'>페이지당</Label>
-              <Select
-                value={String(pageSize)}
-                onValueChange={(v) => {
-                  setQuery({ pageSize: v }, { resetPage: true, replace: true });
-                }}
-              >
-                <SelectTrigger className='w-24'>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent
-                  position='popper'
-                  className='z-[70] bg-white dark:bg-neutral-900 border shadow-md'
-                >
-                  <SelectItem value='10'>10</SelectItem>
-                  <SelectItem value='20'>20</SelectItem>
-                  <SelectItem value='50'>50</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
+        <div className='text-sm'>
+          페이지 {page} / {totalPages}
         </div>
 
-        {/* 채용공고 목록 */}
-        <div className='grid sm:grid-cols-2 lg:grid-cols-3 gap-4'>
-          {data?.items.map((it) => (
-            <JobCard key={it.id} item={it} />
-          ))}
-        </div>
+        <Button
+          variant='outline'
+          size='sm'
+          onClick={() => {
+            if (page < totalPages)
+              setQuery({ page: String(page + 1) }, { replace: false });
+          }}
+          disabled={loading || page >= totalPages}
+        >
+          다음
+        </Button>
+      </div>
+    </main>
+  );
+}
 
-        {/* 페이지네이션 */}
-        <div className='flex items-center justify-center gap-3 pt-2'>
-          <Button
-            variant='outline'
-            size='sm'
-            onClick={() =>
-              setQuery(
-                { page: String(Math.max(1, page - 1)) },
-                { replace: false }
-              )
-            }
-            disabled={page <= 1 || loading}
-          >
-            이전
-          </Button>
-
-          <div className='text-sm'>
-            페이지 {page} / {totalPages}
-          </div>
-
-          <Button
-            variant='outline'
-            size='sm'
-            onClick={() => {
-              if (page < totalPages)
-                setQuery({ page: String(page + 1) }, { replace: false });
-            }}
-            disabled={loading || page >= totalPages}
-          >
-            다음
-          </Button>
-        </div>
-      </main>
+export default function JobsPage() {
+  return (
+    <>
+      <Navigation />
+      <Suspense
+        fallback={
+          <main className='container mx-auto px-4 py-6 text-sm text-muted-foreground'>
+            불러오는 중…
+          </main>
+        }
+      >
+        <JobsPageInner />
+      </Suspense>
     </>
   );
 }
