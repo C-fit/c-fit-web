@@ -104,7 +104,6 @@ function StepCard({
   );
 }
 
-/** B안: 상태로 토글해 에러 시 이미지를 숨김 (any 제거) */
 function SmartImage({
   src,
   alt,
@@ -120,7 +119,7 @@ function SmartImage({
   mode?: 'contain' | 'cover';
   className?: string;
   blur?: boolean;
-  focal?: string; // e.g., 'center' 또는 '50% 20%'
+  focal?: string;
 }) {
   const [hidden, setHidden] = useState(false);
 

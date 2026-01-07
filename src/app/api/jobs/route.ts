@@ -26,8 +26,6 @@ export async function GET(req: Request) {
   const q = (searchParams.get('q') || '').trim();
   const job = (searchParams.get('job') || '').trim(); // 콤마구분 가능: "프론트엔드 개발자,웹 퍼블리셔"
   const company = (searchParams.get('company') || '').trim();
-
-  const exp = (searchParams.get('exp') || '').trim(); // "신입" | "경력무관" | ""(모두)
   const sort = (searchParams.get('sort') || 'recent').trim(); // "recent" | "company" | "title"
 
   // careerYears(정수배열)에 대해 구간 필터: [minYear, maxYear] 중 하나라도 포함되면 매칭
@@ -55,10 +53,8 @@ export async function GET(req: Request) {
   }
   if (company) where.companyName = { contains: company, mode: 'insensitive' };
 
-  if (exp) {
-    // "신입" 또는 "경력무관" 지정 시 빠른 필터
-    where.experienceLevel = exp;
-  }
+  
+  
 
   // 경력 연차 구간 필터(기본: 0~20). 배열에 교집합이 있으면 매칭
   if (yearList.length) {
