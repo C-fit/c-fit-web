@@ -80,12 +80,13 @@ export async function DELETE(req: NextRequest) {
 
   const sp = new URL(req.url).searchParams;
 
-  const jobId = sp.get('jobId') ?? sp.get('id');
+  const jobPostingId = sp.get('jobId') ?? sp.get('id');
 
-  if (!jobId) return NextResponse.json({ error: 'jobId required' }, { status: 400 });
+  if (!jobPostingId)
+    return NextResponse.json({ error: 'jobId required' }, { status: 400 });
 
   const { count } = await prisma.savedJob.deleteMany({
-    where: { id: jobId, userId },
+    where: { userId, jobPostingId },
   });
 
   return NextResponse.json({ ok: true, deleted: count });

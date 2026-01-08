@@ -10,7 +10,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Bookmark, ExternalLink } from 'lucide-react';
 import { useState } from 'react';
-import { toast } from '@/hooks/use-toast';
+import { useToast } from '@/hooks/use-toast';
 
 type Item = {
   id: string;
@@ -32,36 +32,61 @@ export function JobCard({
   item: Item;
   onSavedChange?: (id: string, saved: boolean) => void;
 }) {
+  const { toast } = useToast();
   const [pending, setPending] = useState(false);
-  const [saved, setSaved] = useState(!!item.saved);
+  const [saved, setSaved] = useState(Boolean(item.saved));
 
   async function toggleSave() {
-    if (pending) return
+    if (pending) return;
+
+    const prev = saved;
+    const next = !prev;
+
     setPending(true);
+    setSaved(next);
+    onSavedChange?.(item.id, next);
     try {
       const res = await fetch('/api/saved', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
-        body: JSON.stringify({ jobId: item.id, save: !saved }),
+        body: JSON.stringify({ jobId: item.id, save: next }),
       });
       if (res.status === 401) {
-        window.location.href =
-          '/login?next=' + encodeURIComponent(window.location.pathname);
+        setSaved(prev);
+        onSavedChange?.(item.id, prev);
+
+        toast({
+          variant: 'destructive',
+          title: '로그인 필요',
+          description: '관심공고 저장을 위해 로그인 해주세요.',
+        });
+
+        const nextUrl =
+          window.location.pathname +
+          window.location.search +
+          window.location.hash;
+        window.location.href = '/login?next=' + encodeURIComponent(nextUrl);
         return;
       }
-      if (!res.ok) throw new Error('save failed');
-      const data = await res.json();
-      setSaved(!!data.saved);
-      onSavedChange?.(item.id, !!data.saved);
+      if (!res.ok) throw new Error('save failed : ${res.status}');
+
+      const data = (await res.json().catch(() => ({}))) as { saved?: boolean };
+      const serverSaved = Boolean(data.saved);
+      setSaved(serverSaved);
+      onSavedChange?.(item.id, serverSaved);
     } catch (e) {
-      console.error(e);
+      setSaved(prev);
+      onSavedChange?.(item.id, prev);
       toast({
         variant: 'destructive',
         title: '관심공고 저장 실패',
         description:
           '관심공고 저장에 실패했습니다. 잠시 후 다시 시도해 주세요.',
       });
+      console.error(e);
+    } finally {
+      setPending(false);
     }
   }
 
@@ -76,8 +101,7 @@ export function JobCard({
       <CardContent className='flex-1 space-y-2'>
         <div className='text-sm'>{item.jobName ?? ''}</div>
         <div className='text-xs text-muted-foreground'>
-          경력: {item.experienceLevel ?? '경력무관'} · 연차:{' '}
-          {Math.min(...item.careerYears)}~{Math.max(...item.careerYears)}년
+          경력: {item.experienceLevel ?? '경력무관'}
         </div>
       </CardContent>
       <CardFooter className='flex gap-2 justify-end'>
